@@ -11,7 +11,7 @@ from constraints import rule_constraint
 
 
 class AoTNode:
-    """Superclass of AoT. 
+    """Superclass of AoT.
     """
 
     levels_next = {"Root": "Structure",
@@ -48,7 +48,7 @@ class AoTNode:
         self.children.append(node)
 
     def _resample(self, change_number):
-        """Resample the layout. If the number of entities change, resample also the 
+        """Resample the layout. If the number of entities change, resample also the
         position distribution; otherwise only resample each attribute for each entity.
         Arugments:
             change_number(bool): whether to the number has been reset
@@ -90,7 +90,7 @@ class Root(AoTNode):
         self._resample(change_number)
 
     def prune(self, rule_groups):
-        """Prune the AoT such that all branches satisfy the constraints. 
+        """Prune the AoT such that all branches satisfy the constraints.
         Arguments:
             rule_groups(list of list of Rule): each list of Rule applies to a component
         Returns:
@@ -103,7 +103,7 @@ class Root(AoTNode):
                 new_child = structure._prune(rule_groups)
                 if new_child is not None:
                     new_node.insert(new_child)
-        # during real execution, this should never happens
+        # during real execution, this should never happen
         if len(new_node.children) == 0:
             new_node = None
         return new_node
@@ -122,8 +122,9 @@ class Root(AoTNode):
             components.append(child)
         entities = []
         for component in components:
-            for child in component.children[0].children:
-                entities.append(child)
+            if component.children and component.children[0].children:  # Check if component has layout and entities
+                for child in component.children[0].children:
+                    entities.append(child)
         return structure.name, entities
 
     def sample_new(self, component_idx, attr_name, min_level, max_level, root):
@@ -247,7 +248,7 @@ class Layout(AoTNode):
             self.sample_new_num_count = dict()
             most_num = len(self.position.values)
             for i in range(layout_constraint["Number"][0], layout_constraint["Number"][1] + 1):
-                self.sample_new_num_count[i] = [comb(most_num, i + 1), []]
+                self.sample_new_num_count[i] = [comb(most_num, i + 1, exact=True), []]
         else:
             self.sample_new_num_count = sample_new_num_count
         self.num_count = dict()
@@ -332,7 +333,7 @@ class Layout(AoTNode):
                 self._insert(node)
 
     def _update_constraint(self, rule_group):
-        """Update the constraint of the layout. If one constraint is not satisfied, return None 
+        """Update the constraint of the layout. If one constraint is not satisfied, return None
         such that this structure is disgarded.
         Arguments:
             rule_group(list of Rule): all rules to apply to this layout
@@ -459,16 +460,15 @@ class Layout(AoTNode):
                     self.num_count[value_level] = 0
                     break
             new_num = self.number.get_value(value_level)
-            if previous_num >= new_num:
+
+            if not self.children:  # If no children, can't select from them
+                select = []
+            elif previous_num >= new_num:
                 select = list(np.random.choice(previous_num, new_num, replace=False))
             else:
-                rest = new_num
-                select = []
-                while previous_num < rest:
-                    select += range(previous_num)
-                    rest -= previous_num
-                if rest > 0:
-                    select += list(np.random.choice(previous_num, rest, replace=False))
+                select = list(range(previous_num)) + list(
+                    np.random.choice(previous_num, new_num - previous_num, replace=True))
+
             ret = [value_level, select]
 
             t = 1
@@ -490,62 +490,62 @@ class Layout(AoTNode):
             new_value_idx = self.position.sample_new(self.number.get_value())
             ret = [new_value_idx]
 
-        elif attr_name == "Type":
+        elif attr_name in ["Type", "Size", "Color"]:
+            if not self.children:
+                return []
             if attr_uni:
-                new_value_level = self.children[0].type.sample_new(min_level, max_level)
+                new_value_level = getattr(self.children[0], attr_name.lower()).sample_new(min_level, max_level)
                 ret = [new_value_level]
             else:
                 for index in range(len(self.children)):
-                    new_value_level = self.children[index].type.sample_new(min_level, max_level)
-                    ret.append(new_value_level)
-
-        elif attr_name == "Size":
-            if attr_uni:
-                new_value_level = self.children[0].size.sample_new(min_level, max_level)
-                ret = [new_value_level]
-            else:
-                for index in range(len(self.children)):
-                    new_value_level = self.children[index].size.sample_new(min_level, max_level)
-                    ret.append(new_value_level)
-
-        elif attr_name == "Color":
-            if attr_uni:
-                new_value_level = self.children[0].color.sample_new(min_level, max_level)
-                ret = [new_value_level]
-            else:
-                for index in range(len(self.children)):
-                    new_value_level = self.children[index].color.sample_new(min_level, max_level)
+                    new_value_level = getattr(self.children[index], attr_name.lower()).sample_new(min_level, max_level)
                     ret.append(new_value_level)
         else:
             raise ValueError("Unsupported operation")
         return ret
 
     def _apply_new_value(self, attr_name, value):
+        if not value:
+            return
         L = len(value)
         if attr_name == "Number":
+            # Robustly handle number changes by recreating entities from scratch
             number_value = value[0]
-            select = value[1]
-            if L == 4 and self.position.isChanged:
-                position_value = value[3]
-            else:
-                position_value = value[2]
+            position_value = value[2]  # Use the first sampled position for simplicity
+
             self.number.set_value_level(number_value)
             self.position.set_value_idx(position_value)
             pos = self.position.get_value()
-            new_entity_list = [copy.deepcopy(self.children[idx]) for idx in select]
-            del self.children[:]
-            for i in range(len(pos)):
-                bbox = pos[i]
-                self._insert(new_entity_list[i])
-                self.children[i].bbox = bbox
+
+            del self.children[:]  # Clear old entities
+
+            # Create new entities, similar to _sample() method
+            if self.uniformity.get_value():
+                # If uniform, all new entities are the same
+                if pos:  # Ensure there is at least one position
+                    node = Entity(name=str(0), bbox=pos[0], entity_constraint=self.entity_constraint)
+                    self._insert(node)
+                    for i in range(1, len(pos)):
+                        bbox = pos[i]
+                        node_copy = copy.deepcopy(node)
+                        node_copy.name = str(i)
+                        node_copy.bbox = bbox
+                        self._insert(node_copy)
+            else:
+                # If not uniform, create a new random entity for each position
+                for i in range(len(pos)):
+                    bbox = pos[i]
+                    node = Entity(name=str(i), bbox=bbox, entity_constraint=self.entity_constraint)
+                    self._insert(node)
 
         elif attr_name == "Position":
             self.position.set_value_idx(value[0])
             self.position.isChanged = True
             pos = self.position.get_value()
-            for i in range(len(pos)):
-                bbox = pos[i]
-                self.children[i].bbox = bbox
+            # Ensure number of positions matches number of entities
+            if len(pos) == len(self.children):
+                for i in range(len(pos)):
+                    self.children[i].bbox = pos[i]
 
         elif attr_name == "Type":
             for index in range(len(self.children)):

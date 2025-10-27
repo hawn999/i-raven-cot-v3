@@ -19,18 +19,18 @@ def imsave(array, filepath):
     image.save(filepath)
 
 
-def generate_matrix(array_list):
+def generate_matrix(array_list, n_columns=5):
     # row-major array_list
-    assert len(array_list) <= 9
-    img_grid = np.zeros((IMAGE_SIZE * 3, IMAGE_SIZE * 3), np.uint8)
+    assert len(array_list) <= 3 * n_columns
+    img_grid = np.zeros((IMAGE_SIZE * 3, IMAGE_SIZE * n_columns), np.uint8)
     for idx in range(len(array_list)):
-        i, j = divmod(idx, 3)
+        i, j = divmod(idx, n_columns)
         img_grid[i * IMAGE_SIZE:(i + 1) * IMAGE_SIZE, j * IMAGE_SIZE:(j + 1) * IMAGE_SIZE] = array_list[idx]
     # draw grid
-    for x in [0.33, 0.67]:
-        img_grid[int(x * IMAGE_SIZE * 3) - 1:int(x * IMAGE_SIZE * 3) + 1, :] = 0
-    for y in [0.33, 0.67]:
-        img_grid[:, int(y * IMAGE_SIZE * 3) - 1:int(y * IMAGE_SIZE * 3) + 1] = 0
+    for i in range(1, 3):
+        img_grid[i * IMAGE_SIZE - 1: i * IMAGE_SIZE + 1, :] = 0
+    for i in range(1, n_columns):
+        img_grid[:, i * IMAGE_SIZE - 1: i * IMAGE_SIZE + 1] = 0
     return img_grid
 
 
@@ -48,28 +48,54 @@ def generate_answers(array_list):
     return img_grid
 
 
-def generate_matrix_answer(array_list):
+def generate_matrix_answer(array_list, n_columns=5):
     # row-major array_list
-    assert len(array_list) <= 18
-    img_grid = np.zeros((IMAGE_SIZE * 6, IMAGE_SIZE * 3), np.uint8)
-    for idx in range(len(array_list)):
-        i, j = divmod(idx, 3)
-        img_grid[i * IMAGE_SIZE:(i + 1) * IMAGE_SIZE, j * IMAGE_SIZE:(j + 1) * IMAGE_SIZE] = array_list[idx]
-    # draw grid
-    for x in [0.33, 0.67, 1.00, 1.33, 1.67]:
-        img_grid[int(x * IMAGE_SIZE * 3), :] = 0
-    for y in [0.33, 0.67]:
-        img_grid[:, int(y * IMAGE_SIZE * 3)] = 0
+    assert len(array_list) <= 3 * n_columns + 8
+    img_grid = np.zeros((IMAGE_SIZE * (3 + 2), IMAGE_SIZE * n_columns), np.uint8)  # 3 rows for context, 2 for answers
+
+    context_panels = array_list[:3 * n_columns]
+    answer_panels = array_list[3 * n_columns:]
+
+    # Context
+    for idx in range(len(context_panels)):
+        i, j = divmod(idx, n_columns)
+        img_grid[i * IMAGE_SIZE:(i + 1) * IMAGE_SIZE, j * IMAGE_SIZE:(j + 1) * IMAGE_SIZE] = context_panels[idx]
+
+    # Answers
+    if answer_panels:
+        answer_grid = generate_answers(answer_panels)
+        # Place the 2x4 answer grid at the bottom, centered if possible
+        start_col = (img_grid.shape[1] - answer_grid.shape[1]) // 2
+        img_grid[3 * IMAGE_SIZE: 3 * IMAGE_SIZE + answer_grid.shape[0],
+        start_col:start_col + answer_grid.shape[1]] = answer_grid
+
+    # draw grid lines
+    for i in range(1, 3):
+        img_grid[i * IMAGE_SIZE, :] = 0
+    for i in range(1, n_columns):
+        img_grid[:, i * IMAGE_SIZE] = 0
+
+    img_grid[3 * IMAGE_SIZE, :] = 0  # Separator between context and answers
+
     return img_grid
 
 
-def merge_matrix_answer(matrix, answer):
-    matrix_image = generate_matrix(matrix)
+def merge_matrix_answer(matrix, answer, n_columns=5):
+    matrix_image = generate_matrix(matrix, n_columns)
     answer_image = generate_answers(answer)
-    img_grid = np.ones((IMAGE_SIZE * 5 + 20, IMAGE_SIZE * 4), np.uint8) * 255
-    img_grid[:IMAGE_SIZE * 3, int(0.5 * IMAGE_SIZE):int(3.5 * IMAGE_SIZE)] = matrix_image
-    img_grid[-(IMAGE_SIZE * 2):, :] = answer_image
+
+    # Adjust canvas width to match matrix width
+    img_grid = np.ones((IMAGE_SIZE * 5 + 20, IMAGE_SIZE * n_columns), np.uint8) * 255
+
+    # Center the matrix if it's narrower than the canvas
+    matrix_start_col = (img_grid.shape[1] - matrix_image.shape[1]) // 2
+    img_grid[:IMAGE_SIZE * 3, matrix_start_col:matrix_start_col + matrix_image.shape[1]] = matrix_image
+
+    # Center the answers
+    answer_start_col = (img_grid.shape[1] - answer_image.shape[1]) // 2
+    img_grid[-(IMAGE_SIZE * 2):, answer_start_col:answer_start_col + answer_image.shape[1]] = answer_image
     return img_grid
+
 
 def render_panel(root):
     # Decompose the panel into a structure and its entities
@@ -114,9 +140,9 @@ def render_entity(entity):
     if entity_type == "triangle":
         unit = min(entity_bbox[2], entity_bbox[3]) * IMAGE_SIZE / 2
         dl = int(unit * entity_size)
-        pts = np.array([[center[0], center[1] - dl], 
-                        [center[0] + int(dl / 2.0 * np.sqrt(3)), center[1] + int(dl / 2.0)], 
-                        [center[0] - int(dl / 2.0 * np.sqrt(3)), center[1] + int(dl / 2.0)]], 
+        pts = np.array([[center[0], center[1] - dl],
+                        [center[0] + int(dl / 2.0 * np.sqrt(3)), center[1] + int(dl / 2.0)],
+                        [center[0] - int(dl / 2.0 * np.sqrt(3)), center[1] + int(dl / 2.0)]],
                        np.int32)
         pts = pts.reshape((-1, 1, 2))
         color = 255 - entity_color
@@ -172,7 +198,7 @@ def render_entity(entity):
         entity_angle = entity_bbox[6]
         center = (int(entity_bbox[5] * IMAGE_SIZE), int(entity_bbox[4] * IMAGE_SIZE))
         img = rotate(img, entity_angle, center=center)
-    # planar 
+    # planar
     else:
         img = rotate(img, entity_angle, center=center)
     # img = shift(img, *entity_position)
@@ -226,17 +252,17 @@ def draw_square(img, pt1, pt2, color, width):
         cv2.rectangle(img,
                       pt1,
                       pt2,
-                      color, 
+                      color,
                       -1)
         # draw the edge
-        cv2.rectangle(img, 
+        cv2.rectangle(img,
                       pt1,
                       pt2,
                       255,
                       width)
     # if not filled
     else:
-        cv2.rectangle(img, 
+        cv2.rectangle(img,
                       pt1,
                       pt2,
                       255,

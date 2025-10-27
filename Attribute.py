@@ -13,7 +13,7 @@ class Attribute:
     """Super-class for all attributes. This should not be instantiated.
     In the sub-class, each attribute should have a pre-defined value set
     and a member to indicate the index in the value set. This design enables
-    setting a value by modifying the index only. Also, each instance should 
+    setting a value by modifying the index only. Also, each instance should
     come with value index boundaries, set as min_level and max_level. Boundaries
     are good when we want to set constraints on the value set.
 
@@ -29,16 +29,16 @@ class Attribute:
 
     def sample(self):
         pass
-    
+
     def get_value(self):
         pass
-    
+
     def set_value(self):
         pass
-    
+
     def __repr__(self):
         return self.level + "." + self.name
-    
+
     def __str__(self):
         return self.level + "." + self.name
 
@@ -74,12 +74,13 @@ class Number(Attribute):
             available = set(values) - set(previous_values) - {self.value_level}
         new_idx = np.random.choice(list(available))
         return new_idx
-    
+
     def get_value_level(self):
         return self.value_level
-    
+
     def set_value_level(self, value_level):
-        self.value_level = value_level
+        self.value_level = np.clip(value_level, self.min_level, self.max_level)
+
 
     def get_value(self, value_level=None):
         if value_level is None:
@@ -95,7 +96,7 @@ class Type(Attribute):
         self.values = TYPE_VALUES
         self.min_level = min_level
         self.max_level = max_level
-    
+
     def sample(self, min_level=TYPE_MIN, max_level=TYPE_MAX):
         min_level = max(self.min_level, min_level)
         max_level = min(self.max_level, max_level)
@@ -115,10 +116,11 @@ class Type(Attribute):
 
     def get_value_level(self):
         return self.value_level
-    
+
     def set_value_level(self, value_level):
-        self.value_level = value_level
-    
+        self.value_level = np.clip(value_level, self.min_level, self.max_level)
+
+
     def get_value(self, value_level=None):
         if value_level is None:
             value_level = self.value_level
@@ -137,7 +139,7 @@ class Size(Attribute):
     def sample(self, min_level=SIZE_MIN, max_level=SIZE_MAX):
         min_level = max(self.min_level, min_level)
         max_level = min(self.max_level, max_level)
-        self.value_level = np.random.choice(list(range(min_level, max_level + 1)))   
+        self.value_level = np.random.choice(list(range(min_level, max_level + 1)))
 
     def sample_new(self, min_level=None, max_level=None, previous_values=None):
         if min_level is None or max_level is None:
@@ -153,9 +155,10 @@ class Size(Attribute):
 
     def get_value_level(self):
         return self.value_level
-    
+
     def set_value_level(self, value_level):
-        self.value_level = value_level
+        self.value_level = np.clip(value_level, self.min_level, self.max_level)
+
 
     def get_value(self, value_level=None):
         if value_level is None:
@@ -191,12 +194,12 @@ class Color(Attribute):
 
     def get_value_level(self):
         return self.value_level
-    
+
     def set_value_level(self, value_level):
         if isinstance(value_level, np.int64):
-            self.value_level = int(value_level)
-        else:
-            self.value_level = value_level
+            value_level = int(value_level)
+        self.value_level = np.clip(value_level, self.min_level, self.max_level)
+
 
     def get_value(self, value_level=None):
         if value_level is None:
@@ -232,10 +235,11 @@ class Angle(Attribute):
 
     def get_value_level(self):
         return self.value_level
-    
+
     def set_value_level(self, value_level):
-        self.value_level = value_level
-    
+        self.value_level = np.clip(value_level, self.min_level, self.max_level)
+
+
     def get_value(self, value_level=None):
         if value_level is None:
             value_level = self.value_level
@@ -250,17 +254,18 @@ class Uniformity(Attribute):
         self.values = UNI_VALUES
         self.min_level = min_level
         self.max_level = max_level
-    
+
     def sample(self):
         self.value_level = np.random.choice(list(range(self.min_level, self.max_level + 1)))
-    
+
     def sample_new(self):
         # Should not resample uniformity
         pass
-    
+
     def set_value_level(self, value_level):
-        self.value_level = value_level
-    
+        self.value_level = np.clip(value_level, self.min_level, self.max_level)
+
+
     def get_value_level(self):
         return self.value_level
 
@@ -271,7 +276,7 @@ class Uniformity(Attribute):
 
 
 class Position(Attribute):
-    """Position is a special case. There are the planar position and 
+    """Position is a special case. There are the planar position and
     the angular position. Planar position allows translation in the plane
     while angular Position performs roration around an axis penperdicular to the plane.
     """
@@ -279,7 +284,7 @@ class Position(Attribute):
     def __init__(self, pos_type, pos_list):
         """Instantiate the Position attribute by passing a position type
         and a pre-defined position distribution on the plane. This attribute
-        is strongly coupled with Number and hence value index boundaries are 
+        is strongly coupled with Number and hence value index boundaries are
         not needed.
         Arguments:
             pos_type(str): either "planar" or "angular
@@ -302,7 +307,7 @@ class Position(Attribute):
         length = len(self.values)
         assert num <= length
         self.value_idx = np.random.choice(list(range(length)), num, False)
-    
+
     def sample_new(self, num, previous_values=None):
         # Here sample new relies on probability
         length = len(self.values)
@@ -337,10 +342,10 @@ class Position(Attribute):
             self.value_idx = np.insert(self.value_idx, 0, index)
             ret.append(self.values[index])
         return ret
-    
+
     def get_value_idx(self):
         return self.value_idx
-    
+
     def set_value_idx(self, value_idx):
         # Note that after sampling self.value_idx is a Numpy array
         self.value_idx = value_idx
@@ -352,10 +357,9 @@ class Position(Attribute):
         for idx in value_idx:
             ret.append(self.values[idx])
         return ret
-    
+
     def remove(self, bbox):
         # Note that after sampling self.value_idx is a Numpy array
         idx = self.values.index(bbox)
         np_idx = np.where(self.value_idx == idx)[0][0]
         self.value_idx = np.delete(self.value_idx, np_idx)
-        

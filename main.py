@@ -28,6 +28,8 @@ def separate(args, all_configs):
     random.seed(args.seed)
     np.random.seed(args.seed)
 
+    n_columns = 5  # 可扩展为 3*n 框架
+
     for key in list(all_configs.keys()):
         acc = 0
         for k in trange(args.num_samples):
@@ -48,75 +50,54 @@ def separate(args, all_configs):
 
             start_node = new_root.sample()
 
-            row_1_1 = copy.deepcopy(start_node)
-            for l in range(len(rule_groups)):
-                rule_group = rule_groups[l]
-                rule_num_pos = rule_group[0]
-                row_1_2 = rule_num_pos.apply_rule(row_1_1)
-                row_1_3 = rule_num_pos.apply_rule(row_1_2)
-                for i in range(1, len(rule_group)):
-                    rule = rule_group[i]
-                    row_1_2 = rule.apply_rule(row_1_1, row_1_2)
-                for i in range(1, len(rule_group)):
-                    rule = rule_group[i]
-                    row_1_3 = rule.apply_rule(row_1_2, row_1_3)
-                if l == 0:
-                    to_merge = [row_1_1, row_1_2, row_1_3]
+            rows = []
+            for r in range(3):
+                row = [None] * n_columns
+                if r == 0:
+                    row[0] = copy.deepcopy(start_node)
                 else:
-                    merge_component(to_merge[1], row_1_2, l)
-                    merge_component(to_merge[2], row_1_3, l)
-            row_1_1, row_1_2, row_1_3 = to_merge
+                    row[0] = copy.deepcopy(start_node)
+                    row[0].resample(True)
 
-            row_2_1 = copy.deepcopy(start_node)
-            row_2_1.resample(True)
-            for l in range(len(rule_groups)):
-                rule_group = rule_groups[l]
-                rule_num_pos = rule_group[0]
-                row_2_2 = rule_num_pos.apply_rule(row_2_1)
-                row_2_3 = rule_num_pos.apply_rule(row_2_2)
-                for i in range(1, len(rule_group)):
-                    rule = rule_group[i]
-                    row_2_2 = rule.apply_rule(row_2_1, row_2_2)
-                for i in range(1, len(rule_group)):
-                    rule = rule_group[i]
-                    row_2_3 = rule.apply_rule(row_2_2, row_2_3)
-                if l == 0:
-                    to_merge = [row_2_1, row_2_2, row_2_3]
-                else:
-                    merge_component(to_merge[1], row_2_2, l)
-                    merge_component(to_merge[2], row_2_3, l)
-            row_2_1, row_2_2, row_2_3 = to_merge
+                for l in range(len(rule_groups)):
+                    rule_group = rule_groups[l]
 
-            row_3_1 = copy.deepcopy(start_node)
-            row_3_1.resample(True)
-            for l in range(len(rule_groups)):
-                rule_group = rule_groups[l]
-                rule_num_pos = rule_group[0]
-                row_3_2 = rule_num_pos.apply_rule(row_3_1)
-                row_3_3 = rule_num_pos.apply_rule(row_3_2)
-                for i in range(1, len(rule_group)):
-                    rule = rule_group[i]
-                    row_3_2 = rule.apply_rule(row_3_1, row_3_2)
-                for i in range(1, len(rule_group)):
-                    rule = rule_group[i]
-                    row_3_3 = rule.apply_rule(row_3_2, row_3_3)
-                if l == 0:
-                    to_merge = [row_3_1, row_3_2, row_3_3]
-                else:
-                    merge_component(to_merge[1], row_3_2, l)
-                    merge_component(to_merge[2], row_3_3, l)
-            row_3_1, row_3_2, row_3_3 = to_merge
+                    # Apply rules to generate the rest of the row
+                    for t in range(1, n_columns):
+                        # For now, we use the previous two panels to generate the next one
+                        # to implement the Meta-rule of Recurrence as per CoT-RAVEN.md
+                        # This can be extended to use more previous panels.
+                        if t == 1:
+                            previous_panels = [row[0]]
+                        else:
+                            previous_panels = row[:t]
 
-            imgs = [render_panel(row_1_1),
-                    render_panel(row_1_2),
-                    render_panel(row_1_3),
-                    render_panel(row_2_1),
-                    render_panel(row_2_2),
-                    render_panel(row_2_3),
-                    render_panel(row_3_1),
-                    render_panel(row_3_2),
-                    np.zeros((IMAGE_SIZE, IMAGE_SIZE), np.uint8)]
-            context = [row_1_1, row_1_2, row_1_3, row_2_1, row_2_2, row_2_3, row_3_1, row_3_2]
+                        next_panel = None
+                        for i in range(len(rule_group)):
+                            rule = rule_group[i]
+                            if i == 0: # First rule (Number/Position)
+                                next_panel = rule.apply_rule(previous_panels)
+                            else: # Other rules
+                                next_panel = rule.apply_rule(previous_panels, in_aot=next_panel)
+                        row[t] = next_panel
+
+
+                rows.append(row)
+
+
+            row_1 = rows[0]
+            row_2 = rows[1]
+            row_3 = rows[2]
+
+
+            # The last panel of the last row is the one to predict
+            row_3_3 = row_3[-1]
+            row_3[-1] = None # Set the last panel to be empty
+
+            context = row_1 + row_2 + row_3[:-1]
+            imgs = [render_panel(p) if p is not None else np.zeros((IMAGE_SIZE, IMAGE_SIZE), np.uint8) for p in context]
+            imgs.append(np.zeros((IMAGE_SIZE, IMAGE_SIZE), np.uint8)) # for the question mark
+
             modifiable_attr = sample_attr_avail(rule_groups, row_3_3)
             answer_AoT = copy.deepcopy(row_3_3)
             candidates = [answer_AoT]
@@ -199,9 +180,9 @@ def separate(args, all_configs):
 
             # imsave(generate_matrix_answer(imgs + answers), "/media/dsg3/hs/RAVEN_image/experiments2/{}/{}.jpg".format(key, k))
 
-            image = imgs[0:8] + answers
+            image = imgs[0:14] + answers
             target = candidates.index(answer_AoT)
-            predicted = solve(rule_groups, context, candidates)
+            predicted = solve(rule_groups, context, candidates, n_columns)
             meta_matrix, meta_target = serialize_rules(rule_groups)
             structure, meta_structure = serialize_aot(start_node)
             np.savez("{}/{}/RAVEN_{}_{}.npz".format(args.save_dir, key, k, set_name), image=image,
@@ -222,9 +203,9 @@ def separate(args, all_configs):
 
 def main():
     main_arg_parser = argparse.ArgumentParser(description="parser for I-RAVEN")
-    main_arg_parser.add_argument("--num-samples", type=int, default=10000,
+    main_arg_parser.add_argument("--num-samples", type=int, default=100,
                                  help="number of samples for each component configuration")
-    main_arg_parser.add_argument("--save-dir", type=str, default="/media/dsg3/datasets/I-RAVEN",
+    main_arg_parser.add_argument("--save-dir", type=str, default="dataset",
                                  help="path to folder where the generated dataset will be saved.")
     main_arg_parser.add_argument("--seed", type=int, default=1234,
                                  help="random seed for dataset generation")
