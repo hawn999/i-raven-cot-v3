@@ -3,10 +3,10 @@ import matplotlib
 from matplotlib import pyplot as plt
 import matplotlib.gridspec as gridspec
 import numpy as np
-
+from pathlib import Path
 
 NPZ_FILE_PATH = '/home/scxhc1/nvme_data/cot_raven/I-RAVEN/in_distribute_four_out_center_single/RAVEN_8799_test.npz'
-name = "view_3x5_6.pdf"
+name = "view_3x5_" + Path(NPZ_FILE_PATH).stem + ".pdf"
 # --------------------
 
 # 加载数据
