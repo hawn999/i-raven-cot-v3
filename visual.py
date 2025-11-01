@@ -1,75 +1,157 @@
+# -*- coding: utf-8 -*-
 
-import matplotlib
-from matplotlib import pyplot as plt
-import matplotlib.gridspec as gridspec
+
+import json
+import xml.etree.ElementTree as ET
+
 import numpy as np
-from pathlib import Path
 
-NPZ_FILE_PATH = '/home/scxhc1/nvme_data/cot_raven/I-RAVEN/in_distribute_four_out_center_single/RAVEN_8799_test.npz'
-name = "view_3x5_" + Path(NPZ_FILE_PATH).stem + ".pdf"
-# --------------------
+from const import META_STRUCTURE_FORMAT
+from api import get_real_bbox, get_mask, rle_encode
 
-# 加载数据
-try:
-    data = np.load(NPZ_FILE_PATH)
-    img = data['image']
-    target = int(data['target'])
-except FileNotFoundError:
-    print(f"错误：文件未找到，请检查路径 -> {NPZ_FILE_PATH}")
-    exit()
 
-# 定义网格布局
-fig = plt.figure(figsize=(8, 6.9)) # 稍微加宽图形以适应5列
-heights = (3, 2) # 调整上下文和答案的高度比例
-outer = gridspec.GridSpec(
-        2, 1,
-        wspace=0.2,
-        hspace=0.2,
-        height_ratios=heights)
+def n_tree_serialize(aot):
+    assert aot.is_pg
+    ret = ""
+    if aot.level == "Layout":
+        return aot.name + "./"
+    else:
+        ret += aot.name + "."
+        for child in aot.children:
+            x = n_tree_serialize(child)
+            ret += x
+            ret += "."
+        ret += "/"
+    return ret
 
-# --- 1. 绘制 3x5 上下文网格 ---
-context_spec = gridspec.GridSpecFromSubplotSpec(
-        3, 5, # 3行5列
-        subplot_spec=outer[0],
-        wspace=0.1, hspace=0.1)
 
-# 上下文有 3*5 = 15 个格子，但只显示前14个图像
-for i in range(15):
-    if i < 14: # 最后一个格子是问号，不绘制
-        ax = plt.Subplot(fig, context_spec[i])
-        ax.set_xticks([])
-        ax.set_yticks([])
-        ax.imshow(img[i, :, :], cmap = 'gray') # 使用灰度图的反色，更清晰
-        fig.add_subplot(ax)
-    else: # 在最后一个格子上画一个问号
-        ax = plt.Subplot(fig, context_spec[i])
-        ax.set_xticks([])
-        ax.set_yticks([])
-        ax.text(0.5, 0.5, '?', fontsize=40, ha='center', va='center')
-        fig.add_subplot(ax)
+def serialize_aot(aot):
+    """Meta Structure format
+    META_STRUCTURE_FORMAT provided by const.py
+    """
+    n_tree = n_tree_serialize(aot)
+    meta_structure = np.zeros(len(META_STRUCTURE_FORMAT), np.uint8)
+    split = n_tree.split(".")
+    for node in split:
+        try:
+            node_index = META_STRUCTURE_FORMAT.index(node)
+            meta_structure[node_index] = 1
+        except ValueError:
+            continue
+    return split, meta_structure
 
-# --- 2. 绘制 2x4 答案网格 ---
-answer_spec = gridspec.GridSpecFromSubplotSpec(
-        2, 4, # 2行4列
-        subplot_spec=outer[1],
-        wspace=0.1, hspace=0.1)
 
-# 答案有 8 个选项
-for i in range(8):
-    ax = plt.Subplot(fig, answer_spec[i])
-    ax.set_xticks([])
-    ax.set_yticks([])
-    # 答案图像的索引从上下文图像之后开始（即从第14个开始）
-    ax.imshow(img[14 + i, :, :], cmap = 'gray')
+def serialize_rules(rule_groups):
+    """Meta matrix format
+    ["Constant", "Progression", "Arithmetic", "Distribute_Three", "Number", "Position", "Type", "Size", "Color"]
+    """
+    meta_matrix = np.zeros((8, 9), np.uint8)
+    counter = 0
+    for rule_group in rule_groups:
+        for rule in rule_group:
+            if rule.name == "Constant":
+                meta_matrix[counter, 0] = 1
+            elif rule.name == "Progression":
+                meta_matrix[counter, 1] = 1
+            elif rule.name == "Arithmetic":
+                meta_matrix[counter, 2] = 1
+            else:
+                meta_matrix[counter, 3] = 1
+            if rule.attr == "Number/Position":
+                meta_matrix[counter, 4] = 1
+                meta_matrix[counter, 5] = 1
+            elif rule.attr == "Number":
+                meta_matrix[counter, 4] = 1
+            elif rule.attr == "Position":
+                meta_matrix[counter, 5] = 1
+            elif rule.attr == "Type":
+                meta_matrix[counter, 6] = 1
+            elif rule.attr == "Size":
+                meta_matrix[counter, 7] = 1
+            else:
+                meta_matrix[counter, 8] = 1
+            counter += 1
+    return meta_matrix, np.bitwise_or.reduce(meta_matrix)
 
-    # 如果是正确答案，用红色边框高亮显示
-    if i == target:
-        for spine in ax.spines.values():
-            spine.set_edgecolor('red')
-            spine.set_linewidth(2.5)
 
-    fig.add_subplot(ax)
+def dom_problem(instances, all_column_rules):
+    """
+    instances: 14个上下文AOT + N个候选AOT (N >= 1)
+    all_column_rules: 3个列规则组的列表 (用于 t=2, t=3, t=4)
+    """
+    data = ET.Element("Data")
+    panels = ET.SubElement(data, "Panels")
+    for i in range(len(instances)):
+        panel = instances[i]
+        if panel is None: continue
 
-# 设置标题并保存图像
-fig.suptitle(f"RAVEN Problem (Correct Answer: {target+1})", fontsize=16)
-fig.savefig(name)
+        panel_i = ET.SubElement(panels, "Panel")
+        struct = panel.children[0]
+        struct_i = ET.SubElement(panel_i, "Struct")
+        struct_i.set("name", struct.name)
+        for j in range(len(struct.children)):
+            component = struct.children[j]
+            component_j = ET.SubElement(struct_i, "Component")
+            component_j.set("id", str(j))
+            component_j.set("name", component.name)
+            layout = component.children[0]
+            layout_k = ET.SubElement(component_j, "Layout")
+            layout_k.set("name", layout.name)
+            layout_k.set("Number", str(layout.number.get_value_level()))
+            layout_k.set("Position", json.dumps(layout.position.values))
+            layout_k.set("Uniformity", str(layout.uniformity.get_value_level()))
+            for l in range(len(layout.children)):
+                entity = layout.children[l]
+                entity_l = ET.SubElement(layout_k, "Entity")
+                entity_bbox = entity.bbox
+                entity_type = entity.type.get_value()
+                entity_size = entity.size.get_value()
+                entity_angle = entity.angle.get_value()
+                entity_l.set("bbox", json.dumps(entity_bbox))
+                entity_l.set("real_bbox",
+                             json.dumps(get_real_bbox(entity_bbox, entity_type, entity_size, entity_angle)))
+                entity_l.set("mask", rle_encode(get_mask(entity_bbox, entity_type, entity_size, entity_angle)))
+                entity_l.set("Type", str(entity.type.get_value_level()))
+                entity_l.set("Size", str(entity.size.get_value_level()))
+                entity_l.set("Color", str(entity.color.get_value_level()))
+                entity_l.set("Angle", str(entity.angle.get_value_level()))
+
+    rules = ET.SubElement(data, "Rules")
+
+    for i in range(len(all_column_rules)):
+        rule_groups_for_col = all_column_rules[i]
+        col_rules_i = ET.SubElement(rules, "Column_Rule_Set")
+        col_rules_i.set("column_index", str(i + 2))
+
+        for j in range(len(rule_groups_for_col)):
+            rule_group_for_comp = rule_groups_for_col[j]
+            comp_rule_j = ET.SubElement(col_rules_i, "Component_Rule_Group")
+            comp_rule_j.set("component_id", str(j))
+
+            for rule in rule_group_for_comp:
+                rule_k = ET.SubElement(comp_rule_j, "Rule")
+                rule_k.set("name", rule.name)
+                rule_k.set("attr", rule.attr)
+                # --- 新增：保存 rule.value ---
+                rule_k.set("value", str(rule.value))
+                # --- 新增结束 ---
+
+    modified_attr = ET.SubElement(data, "Modified_attributes")
+
+    num_context_panels = (3 * 5) - 1
+
+    # --- 修复：使用动态循环 ---
+    num_candidates = len(instances) - num_context_panels
+    for i in range(num_candidates):
+        # --- 修复结束 ---
+        candidate = instances[num_context_panels + i]
+
+        candidate_i = ET.SubElement(modified_attr, 'Candidate')
+        candidate_i.set("id", str(i))
+
+        for attr in candidate.modified_attr:
+            attr_j = ET.SubElement(candidate_i, "Attribute")
+            attr_j.set('component_id', str(attr[0]))
+            attr_j.set('name', attr[1])
+
+    return ET.tostring(data)

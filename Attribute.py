@@ -11,14 +11,6 @@ from const import (ANGLE_MAX, ANGLE_MIN, ANGLE_VALUES, COLOR_MAX, COLOR_MIN,
 
 class Attribute:
     """Super-class for all attributes. This should not be instantiated.
-    In the sub-class, each attribute should have a pre-defined value set
-    and a member to indicate the index in the value set. This design enables
-    setting a value by modifying the index only. Also, each instance should
-    come with value index boundaries, set as min_level and max_level. Boundaries
-    are good when we want to set constraints on the value set.
-
-    Before accessing the value, we should sample a value level by calling
-    the sample function.
     """
 
     def __init__(self, name):
@@ -53,17 +45,11 @@ class Number(Attribute):
         self.max_level = max_level
 
     def sample(self, min_level=NUM_MIN, max_level=NUM_MAX):
-        # min_level: min level index
-        # max_level: max level index
         min_level = max(self.min_level, min_level)
         max_level = min(self.max_level, max_level)
         self.value_level = np.random.choice(list(range(min_level, max_level + 1)))
 
     def sample_new(self, min_level=None, max_level=None, previous_values=None):
-        """Sample new values for generating the answer set.
-        Returns:
-            new_idx(int): a new value_level
-        """
         if min_level is None or max_level is None:
             values = list(range(self.min_level, self.max_level + 1))
         else:
@@ -72,6 +58,12 @@ class Number(Attribute):
             available = set(values) - set(self.previous_values) - {self.value_level}
         else:
             available = set(values) - set(previous_values) - {self.value_level}
+
+        if not available:  # 如果没有可用选项，放宽约束
+            available = set(values) - {self.value_level}
+        if not available:  # 极不可能，但作为保险
+            available = set(values)
+
         new_idx = np.random.choice(list(available))
         return new_idx
 
@@ -80,7 +72,6 @@ class Number(Attribute):
 
     def set_value_level(self, value_level):
         self.value_level = np.clip(value_level, self.min_level, self.max_level)
-
 
     def get_value(self, value_level=None):
         if value_level is None:
@@ -111,6 +102,10 @@ class Type(Attribute):
             available = set(values) - set(self.previous_values) - {self.value_level}
         else:
             available = set(values) - set(previous_values) - {self.value_level}
+
+        if not available: available = set(values) - {self.value_level}
+        if not available: available = set(values)
+
         new_idx = np.random.choice(list(available))
         return new_idx
 
@@ -119,7 +114,6 @@ class Type(Attribute):
 
     def set_value_level(self, value_level):
         self.value_level = np.clip(value_level, self.min_level, self.max_level)
-
 
     def get_value(self, value_level=None):
         if value_level is None:
@@ -150,6 +144,10 @@ class Size(Attribute):
             available = set(values) - set(self.previous_values) - {self.value_level}
         else:
             available = set(values) - set(previous_values) - {self.value_level}
+
+        if not available: available = set(values) - {self.value_level}
+        if not available: available = set(values)
+
         new_idx = np.random.choice(list(available))
         return new_idx
 
@@ -158,7 +156,6 @@ class Size(Attribute):
 
     def set_value_level(self, value_level):
         self.value_level = np.clip(value_level, self.min_level, self.max_level)
-
 
     def get_value(self, value_level=None):
         if value_level is None:
@@ -189,6 +186,10 @@ class Color(Attribute):
             available = set(values) - set(self.previous_values) - {self.value_level}
         else:
             available = set(values) - set(previous_values) - {self.value_level}
+
+        if not available: available = set(values) - {self.value_level}
+        if not available: available = set(values)
+
         new_idx = np.random.choice(list(available))
         return new_idx
 
@@ -199,7 +200,6 @@ class Color(Attribute):
         if isinstance(value_level, np.int64):
             value_level = int(value_level)
         self.value_level = np.clip(value_level, self.min_level, self.max_level)
-
 
     def get_value(self, value_level=None):
         if value_level is None:
@@ -230,6 +230,10 @@ class Angle(Attribute):
             available = set(values) - set(self.previous_values) - {self.value_level}
         else:
             available = set(values) - set(previous_values) - {self.value_level}
+
+        if not available: available = set(values) - {self.value_level}
+        if not available: available = set(values)
+
         new_idx = np.random.choice(list(available))
         return new_idx
 
@@ -238,7 +242,6 @@ class Angle(Attribute):
 
     def set_value_level(self, value_level):
         self.value_level = np.clip(value_level, self.min_level, self.max_level)
-
 
     def get_value(self, value_level=None):
         if value_level is None:
@@ -265,7 +268,6 @@ class Uniformity(Attribute):
     def set_value_level(self, value_level):
         self.value_level = np.clip(value_level, self.min_level, self.max_level)
 
-
     def get_value_level(self):
         return self.value_level
 
@@ -276,20 +278,10 @@ class Uniformity(Attribute):
 
 
 class Position(Attribute):
-    """Position is a special case. There are the planar position and
-    the angular position. Planar position allows translation in the plane
-    while angular Position performs roration around an axis penperdicular to the plane.
+    """Position is a special case.
     """
 
     def __init__(self, pos_type, pos_list):
-        """Instantiate the Position attribute by passing a position type
-        and a pre-defined position distribution on the plane. This attribute
-        is strongly coupled with Number and hence value index boundaries are
-        not needed.
-        Arguments:
-            pos_type(str): either "planar" or "angular
-            pos_list(list of list of numbers): actual distribution on the plane
-        """
         super(Position, self).__init__("Position")
         # planar: [x_c, y_c, max_w, max_h]
         # angular: [x_c, y_c, max_w, max_h, x_r, y_r, omega]
@@ -300,22 +292,26 @@ class Position(Attribute):
         self.isChanged = False
 
     def sample(self, num):
-        """Sample multiple positions at the same time.
-        Arguments:
-            num(int): the number of positions to sample
-        """
         length = len(self.values)
-        assert num <= length
+        if num > length:
+            # 如果请求的数量大于可用槽位 (例如 num=9, length=4), 则使用所有槽位
+            num = length
         self.value_idx = np.random.choice(list(range(length)), num, False)
 
+    # --- 修复：使用 cwhy/i-raven 的鲁棒循环来防止死锁 ---
     def sample_new(self, num, previous_values=None):
         # Here sample new relies on probability
         length = len(self.values)
+        if num > length: num = length  # 确保 num 不大于 length
+
         if not previous_values:
             constraints = self.previous_values
         else:
             constraints = previous_values
-        while True:
+
+        # 尝试50次，如果50次都找不到新组合（极不可能，除非 num=length）
+        # 就跳出循环并返回最后一次尝试
+        for _ in range(50):
             finished = True
             new_value_idx = np.random.choice(length, num, False)
             if set(new_value_idx) == set(self.value_idx):
@@ -328,16 +324,16 @@ class Position(Attribute):
                 break
         return new_value_idx
 
+    # --- 修复结束 ---
+
     def sample_add(self, num):
-        """Sample additional number of positions.
-        Arguments:
-            num(int): the number of additional positions to sample
-        Returns:
-            ret(tuple of position): new positions to add to the layout
-        """
         ret = []
         available = set(range(len(self.values))) - set(self.value_idx)
-        idxes_2_add = np.random.choice(list(available), num, False)
+        num_to_sample = min(num, len(available))  # 确保采样数不超过可用数
+        if num_to_sample == 0:
+            return ret
+
+        idxes_2_add = np.random.choice(list(available), num_to_sample, False)
         for index in idxes_2_add:
             self.value_idx = np.insert(self.value_idx, 0, index)
             ret.append(self.values[index])
@@ -347,7 +343,6 @@ class Position(Attribute):
         return self.value_idx
 
     def set_value_idx(self, value_idx):
-        # Note that after sampling self.value_idx is a Numpy array
         self.value_idx = value_idx
 
     def get_value(self, value_idx=None):
@@ -359,7 +354,6 @@ class Position(Attribute):
         return ret
 
     def remove(self, bbox):
-        # Note that after sampling self.value_idx is a Numpy array
         idx = self.values.index(bbox)
         np_idx = np.where(self.value_idx == idx)[0][0]
         self.value_idx = np.delete(self.value_idx, np_idx)

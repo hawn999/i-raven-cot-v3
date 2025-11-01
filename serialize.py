@@ -74,11 +74,17 @@ def serialize_rules(rule_groups):
     return meta_matrix, np.bitwise_or.reduce(meta_matrix)
 
 
-def dom_problem(instances, rule_groups):
+def dom_problem(instances, all_column_rules):
+    """
+    instances: 14个上下文AOT + N个候选AOT (N >= 1)
+    all_column_rules: 3个列规则组的列表 (用于 t=2, t=3, t=4)
+    """
     data = ET.Element("Data")
     panels = ET.SubElement(data, "Panels")
     for i in range(len(instances)):
         panel = instances[i]
+        if panel is None: continue
+
         panel_i = ET.SubElement(panels, "Panel")
         struct = panel.children[0]
         struct_i = ET.SubElement(panel_i, "Struct")
@@ -109,20 +115,36 @@ def dom_problem(instances, rule_groups):
                 entity_l.set("Size", str(entity.size.get_value_level()))
                 entity_l.set("Color", str(entity.color.get_value_level()))
                 entity_l.set("Angle", str(entity.angle.get_value_level()))
+
     rules = ET.SubElement(data, "Rules")
-    for i in range(len(rule_groups)):
-        rule_group = rule_groups[i]
-        rule_group_i = ET.SubElement(rules, "Rule_Group")
-        rule_group_i.set("id", str(i))
-        for rule in rule_group:
-            rule_j = ET.SubElement(rule_group_i, "Rule")
-            rule_j.set("name", rule.name)
-            rule_j.set("attr", rule.attr)
+
+    for i in range(len(all_column_rules)):
+        rule_groups_for_col = all_column_rules[i]
+        col_rules_i = ET.SubElement(rules, "Column_Rule_Set")
+        col_rules_i.set("column_index", str(i + 2))
+
+        for j in range(len(rule_groups_for_col)):
+            rule_group_for_comp = rule_groups_for_col[j]
+            comp_rule_j = ET.SubElement(col_rules_i, "Component_Rule_Group")
+            comp_rule_j.set("component_id", str(j))
+
+            for rule in rule_group_for_comp:
+                rule_k = ET.SubElement(comp_rule_j, "Rule")
+                rule_k.set("name", rule.name)
+                rule_k.set("attr", rule.attr)
+                # --- 新增：保存 rule.value ---
+                rule_k.set("value", str(rule.value))
+                # --- 新增结束 ---
 
     modified_attr = ET.SubElement(data, "Modified_attributes")
 
-    for i in range(8):
-        candidate = instances[i + 8]
+    num_context_panels = (3 * 5) - 1
+
+    # --- 修复：使用动态循环 ---
+    num_candidates = len(instances) - num_context_panels
+    for i in range(num_candidates):
+        # --- 修复结束 ---
+        candidate = instances[num_context_panels + i]
 
         candidate_i = ET.SubElement(modified_attr, 'Candidate')
         candidate_i.set("id", str(i))

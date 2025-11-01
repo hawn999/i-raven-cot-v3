@@ -8,12 +8,12 @@ from const import MAX_COMPONENTS, RULE_ATTR
 from Rule import Rule_Wrapper, Rule
 
 
-def sample_rules() -> List[List[Rule]]:
+def sample_rules(num_components: int) -> List[List[Rule]]:
     """First sample # components; for each component, sample a rule on each attribute.
     """
-    num_components = np.random.randint(1, MAX_COMPONENTS + 1)
+    # num_components = np.random.randint(1, MAX_COMPONENTS + 1) # <-- 删除此行
     all_rules = []
-    for i in range(num_components):
+    for i in range(num_components):  # <-- 现在使用传入的 num_components
         all_rules_component = []
         for j in range(len(RULE_ATTR)):
             idx = np.random.choice(len(RULE_ATTR[j]))
@@ -36,7 +36,10 @@ def sample_attr_avail(rule_groups, row_3_3):
     ret = []
     for i in range(len(rule_groups)):
         rule_group = rule_groups[i]
+
+        # 错误发生在这里，当 rule_groups 的长度与 row_3_3 的组件数不匹配时
         start_node_layout = row_3_3.children[0].children[i].children[0]
+
         row_3_3_layout = row_3_3.children[0].children[i].children[0]
         uni = row_3_3_layout.uniformity.get_value()
         # Number/Position
@@ -94,7 +97,7 @@ def sample_attr(attrs_list):
     """Given the attr_avail list, sample one attribute to modify the value.
     If the available times becomes zero, delete it.
     Arguments:
-        attrs_list(list of list): a flat component of available attributes 
+        attrs_list(list of list): a flat component of available attributes
             to change the values; consisting of different component indexes
     """
     attr_idx = np.random.choice(len(attrs_list))
