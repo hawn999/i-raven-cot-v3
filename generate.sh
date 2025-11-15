@@ -1,0 +1,1 @@
+python main.py --num-samples 100 --save-dir ./dataset_test
