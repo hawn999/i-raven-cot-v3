@@ -233,8 +233,7 @@ def main():
                    "distribute_nine": build_distribute_nine(),
                    "left_center_single_right_center_single": build_left_center_single_right_center_single(),
                    "up_center_single_down_center_single": build_up_center_single_down_center_single(),
-                   "in_center_single_out_center_sing"
-                   "le": build_in_center_single_out_center_single(),
+                   "in_center_single_out_center_single": build_in_center_single_out_center_single(),
                    "in_distribute_four_out_center_single": build_in_distribute_four_out_center_single()
     }
 
