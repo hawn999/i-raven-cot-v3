@@ -1,4 +1,10 @@
 import matplotlib
+# -------------------------------------------------------------------
+# 修复：添加这两行，解决 Qt/xcb 错误
+# 必须在导入 pyplot 之前设置 'Agg' 后端。
+matplotlib.use('Agg')
+# -------------------------------------------------------------------
+
 from matplotlib import pyplot as plt
 import matplotlib.gridspec as gridspec
 import numpy as np
@@ -225,7 +231,7 @@ def visualize_npz(npz_file_path, save_dir):
     # 确保保存目录存在
     os.makedirs(save_dir, exist_ok=True)
     
-    # 使用 .png 格式以加快速度，.pdf 质量高但慢
+    # 使用 .png 格式以加快速度
     save_name = os.path.join(save_dir, problem_name + ".png")
     
     try:
@@ -244,8 +250,11 @@ def main():
                         help="Directory to save visualization images")
     parser.add_argument("--config", nargs='+', default=None, 
                         help=f"Specific configs (sub-dirs) to visualize (e.g., center_single distribute_four). Default: all found ({len(DEFAULT_CONFIGS)})")
+    
+    # --- 变化 1：修改帮助文本 ---
     parser.add_argument("--num_vis", type=int, default=5, 
-                        help="Number of samples to visualize *per split* (train/val/test) for each config")
+                        help="Number of samples to visualize *per config* (total)")
+    
     parser.add_argument("--random_sample", action='store_true', default=True, 
                         help="Randomly sample 'num_vis' files. (Default: True)")
     parser.add_argument("--no_random_sample", action='store_false', dest='random_sample',
@@ -274,7 +283,8 @@ def main():
     print(f"Source: {args.dataset_dir}")
     print(f"Output: {args.save_dir}")
     print(f"Configs: {', '.join(configs_to_process)}")
-    print(f"Samples per split: {args.num_vis} (Random: {args.random_sample})")
+    # --- 变化 2：修改打印信息 ---
+    print(f"Samples per config: {args.num_vis} (Random: {args.random_sample})")
     print("-" * 30)
 
     # 遍历每个配置 (例如 "center_single")
@@ -290,36 +300,35 @@ def main():
         output_config_dir = os.path.join(args.save_dir, config_name)
         os.makedirs(output_config_dir, exist_ok=True)
 
-        # 遍历 train, val, test 集合
-        for split in ["train", "val", "test"]:
-            # 查找该 split 的所有 .npz 文件
-            pattern = os.path.join(config_dir, f"RAVEN_*_{split}.npz")
-            npz_files = glob.glob(pattern)
-            
-            if not npz_files:
-                # print(f"  No files found for split: {split}")
-                continue
+        # --- 变化 3：移除 split 循环，直接搜索所有 .npz ---
+        pattern = os.path.join(config_dir, "RAVEN_*.npz")
+        npz_files = glob.glob(pattern)
+        
+        if not npz_files:
+            print(f"  No .npz files found for config: {config_name}")
+            continue
 
-            # 根据参数选择文件
-            selected_files = []
-            if args.num_vis > 0:
-                if args.random_sample:
-                    k = min(args.num_vis, len(npz_files))
-                    selected_files = random.sample(npz_files, k)
-                else:
-                    npz_files.sort() # 确保顺序
-                    k = min(args.num_vis, len(npz_files))
-                    selected_files = npz_files[:k]
-            
-            if not selected_files:
-                continue
+        # 根据参数选择文件
+        selected_files = []
+        if args.num_vis > 0:
+            if args.random_sample:
+                k = min(args.num_vis, len(npz_files))
+                selected_files = random.sample(npz_files, k)
+            else:
+                npz_files.sort() # 确保顺序
+                k = min(args.num_vis, len(npz_files))
+                selected_files = npz_files[:k]
+        
+        if not selected_files:
+            continue
 
-            print(f"  Visualizing {len(selected_files)} samples for split: {split}")
+        # --- 变化 4：修改打印信息 ---
+        print(f"  Found {len(npz_files)} total files. Visualizing {len(selected_files)} samples...")
 
-            # 为选中的文件生成图像
-            for npz_path in selected_files:
-                # print(f"    -> {Path(npz_path).name}")
-                visualize_npz(npz_path, output_config_dir)
+        # 为选中的文件生成图像
+        for npz_path in selected_files:
+            # print(f"    -> {Path(npz_path).name}")
+            visualize_npz(npz_path, output_config_dir)
 
     print("-" * 30)
     print("Visualization batch complete.")
