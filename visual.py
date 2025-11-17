@@ -5,10 +5,20 @@ import numpy as np
 from pathlib import Path
 import argparse
 import os
+import glob
+import random
 import xml.etree.ElementTree as ET
 
-from sympy.core.parameters import distribute
-
+# 默认的配置（子目录）列表
+DEFAULT_CONFIGS = [
+    "center_single",
+    "distribute_four",
+    "distribute_nine",
+    "left_center_single_right_center_single",
+    "up_center_single_down_center_single",
+    "in_center_single_out_center_single",
+    "in_distribute_four_out_center_single"
+]
 
 def parse_rules_from_xml(xml_path):
     """
@@ -16,12 +26,14 @@ def parse_rules_from_xml(xml_path):
     返回一个字典，键是列索引 (str)，值是该列的规则字符串列表
     """
     if not os.path.exists(xml_path):
+        # print(f"Warning: XML file not found at {xml_path}")
         return None
 
     try:
         tree = ET.parse(xml_path)
         root = tree.getroot()
     except ET.ParseError:
+        print(f"Error: Failed to parse XML {xml_path}")
         return None
 
     rules_data = {}
@@ -72,7 +84,6 @@ def parse_rules_from_xml(xml_path):
 def build_rules_text(rules_info, n_cols=5):
     """
     将 rules_info（按列索引）整理为右侧竖栏要显示的文本。
-    优先按列号从小到大；仅显示存在规则的列。
     """
     if not rules_info:
         return "no rule in XML"
@@ -81,7 +92,6 @@ def build_rules_text(rules_info, n_cols=5):
     try:
         sorted_cols = sorted(int(k) for k in rules_info.keys())
     except Exception:
-        # 如果 key 不是纯数字，直接按字符串排序
         sorted_cols = sorted(rules_info.keys())
 
     sections = []
@@ -89,7 +99,6 @@ def build_rules_text(rules_info, n_cols=5):
         key = str(col)
         if key not in rules_info or len(rules_info[key]) == 0:
             continue
-        # 标题：列号（与上文一致，0-based）
         header = f"Col {col}"
         lines = [f"- {s}" for s in rules_info[key]]
         sections.append(header + "\n" + "\n".join(lines))
@@ -97,49 +106,47 @@ def build_rules_text(rules_info, n_cols=5):
     if not sections:
         return "no visible rules"
 
-    # 段落之间空一行
     return "\n\n".join(sections)
 
 
-def main():
-    # parser = argparse.ArgumentParser(description="Visualize a CoT-RAVEN .npz file with rules.")
-    # parser.add_argument("npz_file", help="Path to the .npz file")
-    # args = parser.parse_args()
+def visualize_npz(npz_file_path, save_dir):
+    """
+    为单个 .npz 文件生成可视化图像
+    """
+    xml_file_path = os.path.splitext(npz_file_path)[0] + ".xml"
 
-    NPZ_FILE_PATH = "/home/scxhc1/nvme_data/cot_test/v2_test1/up_center_single_down_center_single/RAVEN_4542_train.npz"
-    XML_FILE_PATH = os.path.splitext(NPZ_FILE_PATH)[0] + ".xml"
-
-    # --------------------
-
-    # 加载数据
+    # --- 加载数据 ---
     try:
-        data = np.load(NPZ_FILE_PATH)
+        data = np.load(npz_file_path)
         img = data['image']
         target = int(data['target'])
     except FileNotFoundError:
-        print(f"wrong path -> {NPZ_FILE_PATH}")
-        exit()
+        print(f"Error: wrong path -> {npz_file_path}")
+        return
     except KeyError:
-        print(f"{NPZ_FILE_PATH} missing 'image' or 'target' data")
-        exit()
+        print(f"Error: {npz_file_path} missing 'image' or 'target' data")
+        return
+    except Exception as e:
+        print(f"Error: loading {npz_file_path}: {e}")
+        return
 
-    # 解析规则
-    rules_info = parse_rules_from_xml(XML_FILE_PATH)
-    rules_text = build_rules_text(rules_info, n_cols=5)
+    # --- 解析规则 ---
+    rules_info = parse_rules_from_xml(xml_file_path)
+    if rules_info is None:
+        rules_text = "XML not found"
+    else:
+        rules_text = build_rules_text(rules_info, n_cols=5)
 
-    # ====== 图形与网格布局（左：题面；右：规则栏） ======
-    # 适当加宽，右侧留出竖栏
+    # ====== 图形与网格布局 ======
     fig = plt.figure(figsize=(11.8, 7.5))
     fig.subplots_adjust(left=0.05, right=0.97, top=0.90, bottom=0.06)
 
-    # 外层：1行2列 -> 左边主内容（上下两块），右边规则竖栏
     outer = gridspec.GridSpec(
         nrows=1, ncols=2,
-        width_ratios=[6.0, 2.0],  # 调整右侧栏宽度（越大越宽）
+        width_ratios=[6.0, 2.0],
         wspace=0.15
     )
 
-    # 左侧再切两行：上(3×5 上下文) / 下(2×4 答案)
     left = gridspec.GridSpecFromSubplotSpec(
         2, 1, subplot_spec=outer[0],
         height_ratios=(3, 2), hspace=0.22
@@ -159,13 +166,14 @@ def main():
         ax.set_xticks([])
         ax.set_yticks([])
 
-        if i < (n_rows * n_cols - 1):  # 最后一个格子是问号
-            ax.imshow(img[i, :, :], cmap='gray')
+        if i < (n_rows * n_cols - 1):
+            if i < len(img):
+                ax.imshow(img[i, :, :], cmap='gray')
+            else:
+                ax.text(0.5, 0.5, 'X', fontsize=20, ha='center', va='center', color='gray') # 数据缺失
         else:
             ax.text(0.5, 0.5, '?', fontsize=40, ha='center', va='center', color='red')
             ax.set_frame_on(True)
-
-        # 不再在单元格上方写规则标题了（移除 ax.set_title(...)）
         fig.add_subplot(ax)
 
     # --- 2) 2×4 答案网格 ---
@@ -177,15 +185,15 @@ def main():
 
     num_answers = 8
     for i in range(num_answers):
-        if (num_context + i) >= len(img):
-            break  # 防止候选答案少于8个时出错
+        img_index = num_context + i
+        if img_index >= len(img):
+            break  # 防止候选答案少于8个
 
         ax = plt.Subplot(fig, answer_spec[i])
         ax.set_xticks([])
         ax.set_yticks([])
-        ax.imshow(img[num_context + i, :, :], cmap='gray')
+        ax.imshow(img[img_index, :, :], cmap='gray')
 
-        # 正确答案高亮
         if i == target:
             for spine in ax.spines.values():
                 spine.set_edgecolor('red')
@@ -199,8 +207,6 @@ def main():
     ax_rules.set_yticks([])
     ax_rules.axis('off')
 
-    # 给规则栏加一个浅色边框/底
-    # 你也可以去掉 bbox，按需美化
     ax_rules.text(
         0.02, 0.98, rules_text,
         va='top', ha='left',
@@ -212,14 +218,111 @@ def main():
     )
     fig.add_subplot(ax_rules)
 
-    # 标题与保存
-    problem_name = Path(NPZ_FILE_PATH).stem
-    distribution = Path(NPZ_FILE_PATH).parts[-2:-1]
+    # --- 标题与保存 ---
+    problem_name = Path(npz_file_path).stem
     fig.suptitle(f"Problem: {problem_name} (Target: {target + 1})", fontsize=14)
 
-    save_name = "./visual/" + distribution[0] + problem_name[5:] + ".pdf"
-    fig.savefig(save_name)
-    print(f"可视化图像已保存到: {save_name}")
+    # 确保保存目录存在
+    os.makedirs(save_dir, exist_ok=True)
+    
+    # 使用 .png 格式以加快速度，.pdf 质量高但慢
+    save_name = os.path.join(save_dir, problem_name + ".png")
+    
+    try:
+        fig.savefig(save_name)
+    except Exception as e:
+        print(f"Error saving {save_name}: {e}")
+    
+    plt.close(fig) # 关闭图像，释放内存
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Visualize CoT-RAVEN .npz files with rules.")
+    parser.add_argument("dataset_dir", 
+                        help="Path to the main dataset directory (e.g., './dataset')")
+    parser.add_argument("--save_dir", default="./visual", 
+                        help="Directory to save visualization images")
+    parser.add_argument("--config", nargs='+', default=None, 
+                        help=f"Specific configs (sub-dirs) to visualize (e.g., center_single distribute_four). Default: all found ({len(DEFAULT_CONFIGS)})")
+    parser.add_argument("--num_vis", type=int, default=5, 
+                        help="Number of samples to visualize *per split* (train/val/test) for each config")
+    parser.add_argument("--random_sample", action='store_true', default=True, 
+                        help="Randomly sample 'num_vis' files. (Default: True)")
+    parser.add_argument("--no_random_sample", action='store_false', dest='random_sample',
+                        help="Select the first 'num_vis' files instead of random sampling.")
+
+    args = parser.parse_args()
+
+    if not os.path.isdir(args.dataset_dir):
+        print(f"Error: Dataset directory not found: {args.dataset_dir}")
+        return
+
+    # 确定要处理哪些配置
+    if args.config:
+        configs_to_process = args.config
+    else:
+        # 如果未指定，则查找所有默认配置
+        configs_to_process = []
+        for cfg in DEFAULT_CONFIGS:
+            if os.path.isdir(os.path.join(args.dataset_dir, cfg)):
+                configs_to_process.append(cfg)
+        if not configs_to_process:
+            print(f"No default config directories found in {args.dataset_dir}. Specify --config or check path.")
+            return
+            
+    print(f"Starting visualization...")
+    print(f"Source: {args.dataset_dir}")
+    print(f"Output: {args.save_dir}")
+    print(f"Configs: {', '.join(configs_to_process)}")
+    print(f"Samples per split: {args.num_vis} (Random: {args.random_sample})")
+    print("-" * 30)
+
+    # 遍历每个配置 (例如 "center_single")
+    for config_name in configs_to_process:
+        config_dir = os.path.join(args.dataset_dir, config_name)
+        if not os.path.isdir(config_dir):
+            print(f"Skipping '{config_name}': directory not found.")
+            continue
+
+        print(f"Processing config: {config_name}")
+
+        # 为该配置创建输出子目录
+        output_config_dir = os.path.join(args.save_dir, config_name)
+        os.makedirs(output_config_dir, exist_ok=True)
+
+        # 遍历 train, val, test 集合
+        for split in ["train", "val", "test"]:
+            # 查找该 split 的所有 .npz 文件
+            pattern = os.path.join(config_dir, f"RAVEN_*_{split}.npz")
+            npz_files = glob.glob(pattern)
+            
+            if not npz_files:
+                # print(f"  No files found for split: {split}")
+                continue
+
+            # 根据参数选择文件
+            selected_files = []
+            if args.num_vis > 0:
+                if args.random_sample:
+                    k = min(args.num_vis, len(npz_files))
+                    selected_files = random.sample(npz_files, k)
+                else:
+                    npz_files.sort() # 确保顺序
+                    k = min(args.num_vis, len(npz_files))
+                    selected_files = npz_files[:k]
+            
+            if not selected_files:
+                continue
+
+            print(f"  Visualizing {len(selected_files)} samples for split: {split}")
+
+            # 为选中的文件生成图像
+            for npz_path in selected_files:
+                # print(f"    -> {Path(npz_path).name}")
+                visualize_npz(npz_path, output_config_dir)
+
+    print("-" * 30)
+    print("Visualization batch complete.")
 
 
 if __name__ == "__main__":
