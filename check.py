@@ -25,22 +25,104 @@
 # if len(bad) > 50:
 #     print(" ... 仅显示前 50 条")
 
+import os
+import json
 import numpy as np
-from PIL import Image
+import xml.etree.ElementTree as ET
 
-IMG_SIZE = 160
+def inspect_sample(npz_path, black_threshold=5):
+    base, _ = os.path.splitext(npz_path)
+    xml_path = base + ".xml"
 
-img = np.array(Image.open("/path/to/problem_000123.png").convert("L"))
+    print("=== Sample ===")
+    print("npz:", npz_path)
+    print("xml:", xml_path)
 
-# 先只看上面 3x5 的 15 个面板
-panels = []
-for r in range(3):
-    for c in range(5):
-        patch = img[r*IMG_SIZE:(r+1)*IMG_SIZE, c*IMG_SIZE:(c+1)*IMG_SIZE]
-        panels.append(((r, c), patch))
+    # 1. 载入 npz 图像 + target/predict
+    data = np.load(npz_path, allow_pickle=True)
+    images = data["image"]   # 形状应该是 (22, H, W)
+    target = int(data["target"])
+    pred = int(data["predict"])
+    print(f"target={target}, pred={pred}")
 
-for (r, c), patch in panels:
-    # 全 0 或者 95%以上像素非常接近 0（黑）
-    black_ratio = np.mean(patch < 10)
-    if black_ratio > 0.95:
-        print("黑块面板:", r, c, "黑像素比例:", black_ratio)
+    # 2. 载入 xml
+    tree = ET.parse(xml_path)
+    root = tree.getroot()
+    panel_elems = root.find("Panels").findall("Panel")
+    print(f"Panels in xml: {len(panel_elems)}, images: {len(images)}")
+    print()
+
+    # 3. 逐 panel 调试
+    for idx, (panel_img, panel_elem) in enumerate(zip(images, panel_elems)):
+        mean_val = float(panel_img.mean())
+        is_all_zero = not panel_img.any()
+        is_black_like = mean_val < black_threshold
+
+        # 计算这个 panel 在矩阵/答案中的位置（3×5 + 2×4）
+        if idx < 14:
+            # 上下文部分（3×5 展平去掉最后一格）
+            # 原始 3×5 的 index = idx（0..13，对应 0..13；14 是缺的那格）
+            row = idx // 5
+            col = idx % 5
+            kind = f"context(row={row}, col={col})"
+        else:
+            # 答案部分（2×4）
+            ans_idx = idx - 14
+            ans_row = ans_idx // 4
+            ans_col = ans_idx % 4
+            kind = f"candidate(row={ans_row}, col={ans_col}, idx={ans_idx})"
+
+        print("=" * 60)
+        print(f"Panel #{idx}  [{kind}]  mean={mean_val:.2f}  "
+              f"all_zero={is_all_zero}  black_like={is_black_like}")
+
+        struct = panel_elem.find("Struct")
+        struct_name = struct.get("name") if struct is not None else "None"
+        print(f"  Struct: {struct_name}")
+
+        # 统计一下这个 panel 里的实体总数
+        total_entities = 0
+
+        for comp in struct.findall("Component"):
+            comp_id = comp.get("id")
+            comp_name = comp.get("name")
+            layout = comp.find("Layout")
+            if layout is None:
+                print(f"    Component {comp_id} / {comp_name}: NO LAYOUT")
+                continue
+
+            num_level = layout.get("Number")  # level
+            pos_slots = layout.get("Position")
+            uniformity = layout.get("Uniformity")
+
+            try:
+                pos_slots_parsed = json.loads(pos_slots) if pos_slots is not None else None
+            except Exception:
+                pos_slots_parsed = pos_slots
+
+            entities = layout.findall("Entity")
+            total_entities += len(entities)
+
+            print(f"  - Component {comp_id} / {comp_name}")
+            print(f"      Layout   : {layout.get('name')}")
+            print(f"      Number   : level={num_level}")
+            print(f"      Position : slots={pos_slots_parsed}")
+            print(f"      Uniformity: {uniformity}")
+            print(f"      #Entities: {len(entities)}")
+
+            for e_idx, ent in enumerate(entities):
+                bbox = ent.get("bbox")
+                t = ent.get("Type")
+                s = ent.get("Size")
+                c = ent.get("Color")
+                ang = ent.get("Angle")
+                print(f"        Entity {e_idx}: "
+                      f"Type={t}, Size={s}, Color={c}, Angle={ang}, bbox={bbox}")
+
+        print(f"  Total entities in this panel: {total_entities}")
+        print()
+
+if __name__ == "__main__":
+    npz_path = "/path/to/RAVEN_XXXX_XXXX.npz"
+    inspect_sample(npz_path)
+
