@@ -69,7 +69,6 @@ def get_layouts(rule, context, candidate):
     except IndexError:
         return None, None, None  # 缺少组件/布局
 
-
 def check_num_pos(rule, context, candidate):
     """
     检查 Number/Position 规则。
@@ -77,169 +76,191 @@ def check_num_pos(rule, context, candidate):
     """
     layout_t_minus_2, layout_t_minus_1, layout_cand = get_layouts(rule, context, candidate)
     if layout_cand is None:
-        return 0  # 无法检查
+        return 0  # 缺少组件/布局，无法检查
 
     attr = rule.attr
 
-    # --- 规则: Constant ---
+    # --- Constant: 仅检查被声明的属性 ---
     if rule.name == "Constant":
-        num_t_minus_1 = layout_t_minus_1.number.get_value()
-        num_cand = layout_cand.number.get_value()
-        pos_t_minus_1 = set(layout_t_minus_1.position.get_value_idx())
-        pos_cand = set(layout_cand.position.get_value_idx())
+        if attr == "Number":
+            return int(layout_t_minus_1.number.get_value() ==
+                       layout_cand.number.get_value())
+        elif attr == "Position":
+            return int(set(layout_t_minus_1.position.get_value_idx()) ==
+                       set(layout_cand.position.get_value_idx()))
+        elif attr == "Number/Position":  # 仅少数组合规则使用
+            return int((layout_t_minus_1.number.get_value() ==
+                        layout_cand.number.get_value()) and
+                       (set(layout_t_minus_1.position.get_value_idx()) ==
+                        set(layout_cand.position.get_value_idx())))
+        return 0
 
-        # 必须 Number 和 Position 都保持不变
-        if num_t_minus_1 == num_cand and pos_t_minus_1 == pos_cand:
-            return 1
-
-    # --- 规则: Progression ---
+    # --- Progression ---
     elif rule.name == "Progression":
         if attr == "Number":
             v1 = layout_t_minus_2.number.get_value_level()
             v2 = layout_t_minus_1.number.get_value_level()
             v3 = layout_cand.number.get_value_level()
-            if (v2 - v1) == (v3 - v2) and (v2 - v1) == rule.value:
-                return 1
-        else:  # Position
-            if not (
-                    layout_t_minus_2.number.get_value() == layout_t_minus_1.number.get_value() == layout_cand.number.get_value()):
+            return int((v2 - v1) == (v3 - v2) == rule.value)
+        else:  # Position: 循环移位
+            # 先确保三个面板 Number 一致或满足位置可比
+            if not (layout_t_minus_2.number.get_value() ==
+                    layout_t_minus_1.number.get_value() ==
+                    layout_cand.number.get_value()):
                 return 0
             if layout_cand.number.get_value() == 0:
-                return 1  # 空面板的 Progression 规则自动满足
-
+                return 1  # 三者皆空，视为满足
             v1_pos = set(layout_t_minus_2.position.get_value_idx())
             v2_pos = set(layout_t_minus_1.position.get_value_idx())
             v3_pos = set(layout_cand.position.get_value_idx())
-
             most_num = len(layout_cand.position.values)
             diff = rule.value
-
             expected_v2_pos = set((p + diff) % most_num for p in v1_pos)
             expected_v3_pos = set((p + diff) % most_num for p in v2_pos)
+            return int(v2_pos == expected_v2_pos and v3_pos == expected_v3_pos)
 
-            if v2_pos == expected_v2_pos and v3_pos == expected_v3_pos:
-                return 1
-
-    # --- 规则: Arithmetic ---
+    # --- Arithmetic ---
     elif rule.name == "Arithmetic":
         if attr == "Number":
-            # BUG 修复：Arithmetic(Number) 作用于 level (索引)，而不是 value (值)
+            # Number 的算术作用在 level 上；加法 +1 偏置，减法取绝对值
             v1 = layout_t_minus_2.number.get_value_level()
             v2 = layout_t_minus_1.number.get_value_level()
             v3 = layout_cand.number.get_value_level()
-            if rule.value > 0:  # 加法
-                if v3 == v1 + v2 + 1: return 1  # 匹配 Rule.py 的 (L+L+1)
-            else:  # 减法
-                if v3 == abs(v1 - v2): return 1  # 匹配 Rule.py 的 abs(L-L)
-        else:  # Position
+            if rule.value > 0:   # 加
+                return int(v3 == v1 + v2 + 1)
+            else:                # 减
+                return int(v3 == abs(v1 - v2))
+        else:  # Position: 并/差
             v1_pos = set(layout_t_minus_2.position.get_value_idx())
             v2_pos = set(layout_t_minus_1.position.get_value_idx())
             v3_pos = set(layout_cand.position.get_value_idx())
-            if rule.value > 0:  # Union
-                if v3_pos == (v1_pos | v2_pos): return 1
-            else:  # Difference
-                if v3_pos == (v1_pos - v2_pos): return 1
+            if rule.value > 0:   # union
+                return int(v3_pos == (v1_pos | v2_pos))
+            else:                # diff
+                return int(v3_pos == (v1_pos - v2_pos))
 
-    # --- 规则: Distribute_Three ---
+    # --- Distribute_Three ---
     elif rule.name == "Distribute_Three":
         if attr == "Number":
             v1 = layout_t_minus_2.number.get_value_level()
             v2 = layout_t_minus_1.number.get_value_level()
             v3 = layout_cand.number.get_value_level()
-            if v1 != v2 and v1 != v3 and v2 != v3:
-                return 1
-        else:  # Position
+            return int(v1 != v2 and v1 != v3 and v2 != v3)
+        else:
             v1_pos = set(layout_t_minus_2.position.get_value_idx())
             v2_pos = set(layout_t_minus_1.position.get_value_idx())
             v3_pos = set(layout_cand.position.get_value_idx())
-            if v1_pos != v2_pos and v1_pos != v3_pos and v2_pos != v3_pos:
-                return 1
+            return int(v1_pos != v2_pos and v1_pos != v3_pos and v2_pos != v3_pos)
 
-    return 0  # 规则不匹配
-
+    return 0
 
 def check_entity(rule, context, candidate):
     """
     检查实体属性规则 (Type, Size, Color)。
+    - 空面板统一按 len(children)==0 判定
+    - Number/Size 带 ±1 偏置；Color 无偏置
     """
     layout_t_minus_2, layout_t_minus_1, layout_cand = get_layouts(rule, context, candidate)
     if layout_cand is None:
-        return 0  # 无法检查
+        return 0
 
     attr = rule.attr
+    attr_lower = attr.lower()
 
-    # 实体规则要求面板非空，且属性一致
-    is_consistent_v1 = check_consistency(layout_t_minus_2, attr)
-    is_consistent_v2 = check_consistency(layout_t_minus_1, attr)
-    is_consistent_v3 = check_consistency(layout_cand, attr)
+    def _is_empty(layout):
+        return len(layout.children) == 0
 
-    is_empty_v1 = layout_t_minus_2.number.get_value() == 0
-    is_empty_v2 = layout_t_minus_1.number.get_value() == 0
-    is_empty_v3 = layout_cand.number.get_value() == 0
+    def _consistent(layout):
+        """布局内该属性是否一致"""
+        if not layout.children:
+            return True
+        v0 = getattr(layout.children[0], attr_lower).get_value_level()
+        for ent in layout.children[1:]:
+            if getattr(ent, attr_lower).get_value_level() != v0:
+                return False
+        return True
 
-    # 如果三个面板都一致（或为空），则继续检查
-    if (is_consistent_v1 or is_empty_v1) and \
-            (is_consistent_v2 or is_empty_v2) and \
-            (is_consistent_v3 or is_empty_v3):
+    is_empty_v1, is_empty_v2, is_empty_v3 = map(_is_empty, (layout_t_minus_2, layout_t_minus_1, layout_cand))
+    is_consistent_v1, is_consistent_v2, is_consistent_v3 = map(_consistent, (layout_t_minus_2, layout_t_minus_1, layout_cand))
 
-        # 如果三个都为空，规则满足
-        if is_empty_v1 and is_empty_v2 and is_empty_v3:
-            return 1
+    # 三个都空：规则满足
+    if is_empty_v1 and is_empty_v2 and is_empty_v3:
+        return 1
 
-        # v3 为空，但 v1/v2 非空，这可能是一个合法的 Arithmetic(sub)
-        if is_empty_v3 and (not is_empty_v1 or not is_empty_v2):
-            if rule.name == "Arithmetic" and rule.value < 0:
-                # 检查是否 v1 == v2 (例如, 5-5=0)
-                if not is_empty_v1 and not is_empty_v2:
-                    v1_val = getattr(layout_t_minus_2.children[0], attr.lower()).get_value_level()
-                    v2_val = getattr(layout_t_minus_1.children[0], attr.lower()).get_value_level()
-                    if v1_val == v2_val:
-                        return 1
-            return 0  # 空面板不满足其他规则
+    # 若有非空，要求一致性或空可跳过该列比较
+    if not ((is_consistent_v1 or is_empty_v1) and
+            (is_consistent_v2 or is_empty_v2) and
+            (is_consistent_v3 or is_empty_v3)):
+        return 0
 
-        # v1 或 v2 为空，但 v3 非空
-        if (is_empty_v1 or is_empty_v2) and not is_empty_v3:
-            if rule.name == "Arithmetic" and rule.value > 0:  # 0 + v2 = v3?
-                v1 = getattr(layout_t_minus_2.children[0], attr.lower()).get_value_level() if not is_empty_v1 else 0
-                v2 = getattr(layout_t_minus_1.children[0], attr.lower()).get_value_level() if not is_empty_v2 else 0
-                v3 = getattr(layout_cand.children[0], attr.lower()).get_value_level()
-
-                expected_v3 = (v1 + v2) if rule.attr == "Color" else (v1 + v2 + 1)
-                if v3 == expected_v3: return 1
-            return 0  # 空面板不满足其他规则
-
-        # --- 常规情况：三个面板都非空 ---
-        attr_lower = rule.attr.lower()
+    # 取 level 值（空则不取）
+    if not is_empty_v1:
         v1 = getattr(layout_t_minus_2.children[0], attr_lower).get_value_level()
+    if not is_empty_v2:
         v2 = getattr(layout_t_minus_1.children[0], attr_lower).get_value_level()
+    if not is_empty_v3:
         v3 = getattr(layout_cand.children[0], attr_lower).get_value_level()
 
-        # --- 规则: Constant ---
-        if rule.name == "Constant":
-            if v3 == v2:
-                return 1
+    # --- Constant ---
+    if rule.name == "Constant":
+        # 空 → 空 已在前面返回；现为至少 v2/v3 非空
+        if not is_empty_v2 and not is_empty_v3:
+            return int(v3 == v2)
+        return 0
 
-        # --- 规则: Progression ---
-        elif rule.name == "Progression":
-            if (v2 - v1) == (v3 - v2) and (v2 - v1) == rule.value:
-                return 1
+    # --- Progression ---
+    elif rule.name == "Progression":
+        if not (is_empty_v1 or is_empty_v2 or is_empty_v3):
+            return int((v2 - v1) == (v3 - v2) == rule.value)
+        return 0
 
-        # --- 规则: Arithmetic ---
-        elif rule.name == "Arithmetic":
-            if rule.value > 0:  # 加法
-                expected_v3 = (v1 + v2) if rule.attr == "Color" else (v1 + v2 + 1)
-                if v3 == expected_v3: return 1
-            else:  # 减法
-                expected_v3_val = (v1 - v2) if rule.attr == "Color" else (v1 - v2 - 1)
-                if v3 == abs(expected_v3_val): return 1  # 匹配 Rule.py 中的 abs()
-
-        # --- 规则: Distribute_Three ---
-        elif rule.name == "Distribute_Three":
-            if v1 != v2 and v1 != v3 and v2 != v3:
+    # --- Arithmetic ---
+    elif rule.name == "Arithmetic":
+        # 处理因空引起的边界情况
+        if rule.value > 0:
+            # 加法：Color 无偏置，其它 +1 偏置
+            if is_empty_v1 and is_empty_v2 and not is_empty_v3:
+                # 0+0 不产生明确信号，判 0
+                return 0
+            if not (is_empty_v1 or is_empty_v2 or is_empty_v3):
+                expected_v3 = (v1 + v2) if attr == "Color" else (v1 + v2 + 1)
+                return int(v3 == expected_v3)
+        else:
+            # 减法：Color 无偏置，其它 (v1 - v2 - 1) 的绝对值
+            if not (is_empty_v1 or is_empty_v2) and is_empty_v3:
+                # 例如 5-5 → 0（空）
                 return 1
+            if not (is_empty_v1 or is_empty_v2 or is_empty_v3):
+                expected_v3 = (v1 - v2) if attr == "Color" else (v1 - v2 - 1)
+                return int(v3 == abs(expected_v3))
+        return 0
+
+    # --- Distribute_Three ---
+    elif rule.name == "Distribute_Three":
+        if not (is_empty_v1 or is_empty_v2 or is_empty_v3):
+            return int(v1 != v2 and v1 != v3 and v2 != v3)
+        return 0
 
     return 0
 
+def solve_with_scores(rule_groups, context, candidates):
+    """
+    返回每个候选的得分，并给出是否“有且仅有一个最高分”。
+    用于生成阶段强制唯一解：max>0 且 top-1 唯一。
+    """
+    scores = []
+    for cand in candidates:
+        s = 0
+        for component_idx, rule_group in enumerate(rule_groups):
+            rule_num_pos = rule_group[0]
+            s += check_num_pos(rule_num_pos, context, cand)
+            for entity_rule in rule_group[1:]:
+                s += check_entity(entity_rule, context, cand)
+        scores.append(s)
+    scores = np.array(scores)
+    n_top = np.count_nonzero(scores == scores.max())
+    ok = (scores.max() > 0) and (n_top == 1)
+    return scores, ok
 
 def check_consistency(layout, attr):
     """检查一个布局内的所有实体是否在某个属性上值都相同"""

@@ -18,40 +18,37 @@ def imsave(array, filepath):
     image = Image.fromarray(array)
     image.save(filepath)
 
-
 def generate_matrix(array_list, n_columns=5):
     # row-major array_list
     assert len(array_list) <= 3 * n_columns
-    img_grid = np.zeros((IMAGE_SIZE * 3, IMAGE_SIZE * n_columns), np.uint8)
+    img_grid = np.ones((IMAGE_SIZE * 3, IMAGE_SIZE * n_columns), np.uint8) * 255
     for idx in range(len(array_list)):
         i, j = divmod(idx, n_columns)
-        img_grid[i * IMAGE_SIZE:(i + 1) * IMAGE_SIZE, j * IMAGE_SIZE:(j + 1) * IMAGE_SIZE] = array_list[idx]
-    # draw grid
+        img_grid[i * IMAGE_SIZE:(i + 1) * IMAGE_SIZE,
+                 j * IMAGE_SIZE:(j + 1) * IMAGE_SIZE] = array_list[idx]
     for i in range(1, 3):
         img_grid[i * IMAGE_SIZE - 1: i * IMAGE_SIZE + 1, :] = 0
     for i in range(1, n_columns):
         img_grid[:, i * IMAGE_SIZE - 1: i * IMAGE_SIZE + 1] = 0
     return img_grid
 
-
 def generate_answers(array_list):
     assert len(array_list) <= 8
-    img_grid = np.zeros((IMAGE_SIZE * 2, IMAGE_SIZE * 4), np.uint8)
+    img_grid = np.ones((IMAGE_SIZE * 2, IMAGE_SIZE * 4), np.uint8) * 255
     for idx in range(len(array_list)):
         i, j = divmod(idx, 4)
-        img_grid[i * IMAGE_SIZE:(i + 1) * IMAGE_SIZE, j * IMAGE_SIZE:(j + 1) * IMAGE_SIZE] = array_list[idx]
-    # draw grid
-    for x in [0.5]:
-        img_grid[int(x * IMAGE_SIZE * 2) - 1:int(x * IMAGE_SIZE * 2) + 1, :] = 0
+        img_grid[i * IMAGE_SIZE:(i + 1) * IMAGE_SIZE,
+                 j * IMAGE_SIZE:(j + 1) * IMAGE_SIZE] = array_list[idx]
+    img_grid[int(0.5 * IMAGE_SIZE * 2) - 1:int(0.5 * IMAGE_SIZE * 2) + 1, :] = 0
     for y in [0.25, 0.5, 0.75]:
         img_grid[:, int(y * IMAGE_SIZE * 4) - 1:int(y * IMAGE_SIZE * 4) + 1] = 0
     return img_grid
 
-
 def generate_matrix_answer(array_list, n_columns=5):
     # row-major array_list
     assert len(array_list) <= 3 * n_columns + 8
-    img_grid = np.zeros((IMAGE_SIZE * (3 + 2), IMAGE_SIZE * n_columns), np.uint8)  # 3 rows for context, 2 for answers
+    # 白底画布（上 3 行 context，下 2 行 answers）
+    img_grid = np.ones((IMAGE_SIZE * (3 + 2), IMAGE_SIZE * n_columns), np.uint8) * 255
 
     context_panels = array_list[:3 * n_columns]
     answer_panels = array_list[3 * n_columns:]
@@ -59,26 +56,24 @@ def generate_matrix_answer(array_list, n_columns=5):
     # Context
     for idx in range(len(context_panels)):
         i, j = divmod(idx, n_columns)
-        img_grid[i * IMAGE_SIZE:(i + 1) * IMAGE_SIZE, j * IMAGE_SIZE:(j + 1) * IMAGE_SIZE] = context_panels[idx]
+        img_grid[i * IMAGE_SIZE:(i + 1) * IMAGE_SIZE,
+                 j * IMAGE_SIZE:(j + 1) * IMAGE_SIZE] = context_panels[idx]
 
     # Answers
     if answer_panels:
         answer_grid = generate_answers(answer_panels)
-        # Place the 2x4 answer grid at the bottom, centered if possible
         start_col = (img_grid.shape[1] - answer_grid.shape[1]) // 2
         img_grid[3 * IMAGE_SIZE: 3 * IMAGE_SIZE + answer_grid.shape[0],
-        start_col:start_col + answer_grid.shape[1]] = answer_grid
+                 start_col:start_col + answer_grid.shape[1]] = answer_grid
 
-    # draw grid lines
+    # 网格线
     for i in range(1, 3):
         img_grid[i * IMAGE_SIZE, :] = 0
     for i in range(1, n_columns):
         img_grid[:, i * IMAGE_SIZE] = 0
-
-    img_grid[3 * IMAGE_SIZE, :] = 0  # Separator between context and answers
+    img_grid[3 * IMAGE_SIZE, :] = 0  # context 与 answers 分隔线
 
     return img_grid
-
 
 def merge_matrix_answer(matrix, answer, n_columns=5):
     matrix_image = generate_matrix(matrix, n_columns)
