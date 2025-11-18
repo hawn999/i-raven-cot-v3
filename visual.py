@@ -263,7 +263,7 @@ def main():
     args = parser.parse_args()
 
     if not os.path.isdir(args.dataset_dir):
-        print(f"Error: Dataset directory not found: {args.dataset_dir}")
+        visualize_npz(args.dataset_dir, args.save_dir)
         return
 
     # 确定要处理哪些配置
@@ -300,7 +300,6 @@ def main():
         output_config_dir = os.path.join(args.save_dir, config_name)
         os.makedirs(output_config_dir, exist_ok=True)
 
-        # --- 变化 3：移除 split 循环，直接搜索所有 .npz ---
         pattern = os.path.join(config_dir, "RAVEN_*.npz")
         npz_files = glob.glob(pattern)
         

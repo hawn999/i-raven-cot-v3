@@ -22,9 +22,9 @@ def solve(rule_groups, context, candidates):
     """
     satisfied = [0] * len(candidates)
 
-    if len(context) < 2:
-        # 上下文不足，无法进行 2-arity 检查，只能随机猜
-        return np.random.choice(len(candidates))
+    # if len(context) < 2:
+    #     # 上下文不足，无法进行 2-arity 检查，只能随机猜
+    #     return np.random.choice(len(candidates))
 
     for i, candidate in enumerate(candidates):
         score = 0
@@ -43,7 +43,7 @@ def solve(rule_groups, context, candidates):
         satisfied[i] = score
 
     satisfied = np.array(satisfied)
-    # 找到最高分
+
     max_score = np.max(satisfied)
 
     # 检查是否有规则被应用（score > 0）。如果没有，随机猜测。

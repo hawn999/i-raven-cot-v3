@@ -1,7 +1,7 @@
 import os, glob, numpy as np
 
-dataset_dir = "/home/scxhc1/nvme_data/cot_test/I-RAVEN"  # 改成你的
-pattern = "**/*_train.npz"             # 或 *_val.npz / *_test.npz
+dataset_dir = "/home/scxhc1/nvme_data/cot_datasets/v2_test1/I-RAVEN"
+pattern = "**/*_*.npz"
 
 expected_panels = 22
 expected_side = 160

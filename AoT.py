@@ -401,65 +401,65 @@ class Layout(AoTNode):
         assert isinstance(instance.max_level, (int, np.int64))
 
     def _sample_new(self, attr_name, min_level, max_level, layout):
-    if attr_name == "Number":
-        while True:
-            value_level = self.number.sample_new(min_level, max_level)
-            if layout.sample_new_num_count[value_level][0] == 0:
-                continue
-            new_num = self.number.get_value(value_level)
-            new_value_idx = self.position.sample_new(new_num)
-            set_new_value_idx = set(new_value_idx)
-            if set_new_value_idx not in layout.sample_new_num_count[value_level][1]:
-                layout.sample_new_num_count[value_level][0] -= 1
-                layout.sample_new_num_count[value_level][1].append(set_new_value_idx)
-                break
-        self.number.set_value_level(value_level)
-        self.position.set_value_idx(new_value_idx)
-        pos = self.position.get_value()
-        del self.children[:]
-        for i in range(len(pos)):
-            bbox = pos[i]
-            node = Entity(name=str(i), bbox=bbox, entity_constraint=self.entity_constraint)
-            self._insert(node)
-
-    elif attr_name == "Position":
-        new_value_idx = self.position.sample_new(self.number.get_value())
-        layout.position.previous_values.append(new_value_idx)
-        self.position.set_value_idx(new_value_idx)
-        pos = self.position.get_value()
-        # --- 关键修复：如位置基数变化，重建 children；否则逐一更新 bbox ---
-        if len(pos) != len(self.children):
+        if attr_name == "Number":
+            while True:
+                value_level = self.number.sample_new(min_level, max_level)
+                if layout.sample_new_num_count[value_level][0] == 0:
+                    continue
+                new_num = self.number.get_value(value_level)
+                new_value_idx = self.position.sample_new(new_num)
+                set_new_value_idx = set(new_value_idx)
+                if set_new_value_idx not in layout.sample_new_num_count[value_level][1]:
+                    layout.sample_new_num_count[value_level][0] -= 1
+                    layout.sample_new_num_count[value_level][1].append(set_new_value_idx)
+                    break
+            self.number.set_value_level(value_level)
+            self.position.set_value_idx(new_value_idx)
+            pos = self.position.get_value()
             del self.children[:]
             for i in range(len(pos)):
                 bbox = pos[i]
                 node = Entity(name=str(i), bbox=bbox, entity_constraint=self.entity_constraint)
                 self._insert(node)
+
+        elif attr_name == "Position":
+            new_value_idx = self.position.sample_new(self.number.get_value())
+            layout.position.previous_values.append(new_value_idx)
+            self.position.set_value_idx(new_value_idx)
+            pos = self.position.get_value()
+            # --- 关键修复：如位置基数变化，重建 children；否则逐一更新 bbox ---
+            if len(pos) != len(self.children):
+                del self.children[:]
+                for i in range(len(pos)):
+                    bbox = pos[i]
+                    node = Entity(name=str(i), bbox=bbox, entity_constraint=self.entity_constraint)
+                    self._insert(node)
+            else:
+                for i in range(len(pos)):
+                    bbox = pos[i]
+                    self.children[i].bbox = bbox
+            # --- 修复结束 ---
+
+        elif attr_name == "Type":
+            for index in range(len(self.children)):
+                new_value_level = self.children[index].type.sample_new(min_level, max_level)
+                self.children[index].type.set_value_level(new_value_level)
+                layout.children[index].type.previous_values.append(new_value_level)
+
+        elif attr_name == "Size":
+            for index in range(len(self.children)):
+                new_value_level = self.children[index].size.sample_new(min_level, max_level)
+                self.children[index].size.set_value_level(new_value_level)
+                layout.children[index].size.previous_values.append(new_value_level)
+
+        elif attr_name == "Color":
+            for index in range(len(self.children)):
+                new_value_level = self.children[index].color.sample_new(min_level, max_level)
+                self.children[index].color.set_value_level(new_value_level)
+                layout.children[index].color.previous_values.append(new_value_level)
+
         else:
-            for i in range(len(pos)):
-                bbox = pos[i]
-                self.children[i].bbox = bbox
-        # --- 修复结束 ---
-
-    elif attr_name == "Type":
-        for index in range(len(self.children)):
-            new_value_level = self.children[index].type.sample_new(min_level, max_level)
-            self.children[index].type.set_value_level(new_value_level)
-            layout.children[index].type.previous_values.append(new_value_level)
-
-    elif attr_name == "Size":
-        for index in range(len(self.children)):
-            new_value_level = self.children[index].size.sample_new(min_level, max_level)
-            self.children[index].size.set_value_level(new_value_level)
-            layout.children[index].size.previous_values.append(new_value_level)
-
-    elif attr_name == "Color":
-        for index in range(len(self.children)):
-            new_value_level = self.children[index].color.sample_new(min_level, max_level)
-            self.children[index].color.set_value_level(new_value_level)
-            layout.children[index].color.previous_values.append(new_value_level)
-
-    else:
-        raise ValueError("Unsupported operation")
+            raise ValueError("Unsupported operation")
 
     def _sample_new_value(self, attr_name, min_level, max_level, attr_uni, mode_3):
 

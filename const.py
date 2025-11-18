@@ -21,13 +21,13 @@ UNI_VALUES = [False, False, False, True]
 UNI_MIN = 0
 UNI_MAX = len(UNI_VALUES) - 1
 
-# Type
+# Type 6
 TYPE_VALUES = ["none", "triangle", "square", "pentagon", "hexagon", "circle"]
 # TYPE_VALUES = ["none", "triangle", "square", "pentagon", "hexagon", "", "", "", "", "", "circle"]
 TYPE_MIN = 0
 TYPE_MAX = len(TYPE_VALUES) - 1
 
-# Size
+# Size 6
 SIZE_VALUES = [0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
 SIZE_MIN = 0
 SIZE_MAX = len(SIZE_VALUES) - 1
