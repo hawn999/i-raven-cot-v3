@@ -64,8 +64,13 @@ def separate(args, all_configs):
 
             # --- 步骤 2: 生成递推列 (t=2, 3, 4) ---
             for t in range(r_base, n_columns):
-                # 传入正确的 num_components
-                column_rule_groups = sample_rules(num_components)
+                # column_rule_groups = sample_rules(num_components)
+                column_rule_groups = None
+                while True:
+                    candidate_rules = sample_rules(num_components)
+                    if root.prune(candidate_rules) is not None:
+                        column_rule_groups = candidate_rules
+                        break
                 all_column_rules.append(column_rule_groups)
 
                 for r in range(n_rows):

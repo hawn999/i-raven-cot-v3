@@ -244,15 +244,15 @@ def visualize_npz(npz_file_path, save_dir):
 
 def main():
     parser = argparse.ArgumentParser(description="Visualize CoT-RAVEN .npz files with rules.")
-    parser.add_argument("dataset_dir", 
+    parser.add_argument("--dataset_dir", default="./dataset_test2",
                         help="Path to the main dataset directory (e.g., './dataset')")
-    parser.add_argument("--save_dir", default="./visual", 
+    parser.add_argument("--save_dir", default="./visual/test2_10000",
                         help="Directory to save visualization images")
     parser.add_argument("--config", nargs='+', default=None, 
                         help=f"Specific configs (sub-dirs) to visualize (e.g., center_single distribute_four). Default: all found ({len(DEFAULT_CONFIGS)})")
     
     # --- 变化 1：修改帮助文本 ---
-    parser.add_argument("--num_vis", type=int, default=5, 
+    parser.add_argument("--num_vis", type=int, default=100,
                         help="Number of samples to visualize *per config* (total)")
     
     parser.add_argument("--random_sample", action='store_true', default=True, 
