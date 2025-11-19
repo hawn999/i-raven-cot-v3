@@ -197,6 +197,9 @@ class Arithmetic(Rule):
             else:
                 new_pos_idx = set(first_layout_value_idx) - set(second_layout_value_idx)
 
+            if not new_pos_idx:
+                return None
+
             new_layout.number.set_value_level(len(new_pos_idx) - 1)
             new_layout.position.set_value_idx(np.array(list(new_pos_idx)))
 
