@@ -109,217 +109,82 @@ def separate(args, all_configs):
                     context_list_flat]
             full_context_aot = [p for p in context_list_flat if p is not None]
 
-            # # --- 步骤 4: 生成干扰项 (I-RAVEN version)---
-            # rules_for_last_step = all_column_rules[-1]
-            # modifiable_attr = sample_attr_avail(rules_for_last_step, answer_AoT)
-            # candidates = [answer_AoT]
-
-            # attr_num = 3
-            # if attr_num <= len(modifiable_attr):
-            #     idx = np.random.choice(len(modifiable_attr), attr_num, replace=False)
-            #     selected_attr = [modifiable_attr[i] for i in idx]
-            # else:
-            #     selected_attr = modifiable_attr
-
-            # mode = None
-            # pos = [i for i in range(len(selected_attr)) if selected_attr[i][1] == 'Number']
-            # if pos:
-            #     pos = pos[0]
-            #     selected_attr[pos], selected_attr[-1] = selected_attr[-1], selected_attr[pos]
-
-            #     pos = [i for i in range(len(selected_attr)) if selected_attr[i][1] == 'Position']
-            #     if pos:
-            #         mode = 'Position-Number'
-            # values = []
-            # if len(selected_attr) >= 3:
-            #     mode_3 = None
-            #     if mode == 'Position-Number':
-            #         mode_3 = '3-Position-Number'
-            #     for i in range(attr_num):
-            #         component_idx, attr_name, min_level, max_level, attr_uni = selected_attr[i][0], selected_attr[i][1], \
-            #             selected_attr[i][3], selected_attr[i][4], \
-            #             selected_attr[i][5]
-            #         value = answer_AoT.sample_new_value(component_idx, attr_name, min_level, max_level, attr_uni,
-            #                                             mode_3)
-            #         values.append(value)
-            #         tmp = []
-            #         for j in candidates:
-            #             new_AoT = copy.deepcopy(j)
-            #             new_AoT.apply_new_value(component_idx, attr_name, value)
-            #             tmp.append(new_AoT)
-            #         candidates += tmp
-
-            # elif len(selected_attr) == 2:
-            #     component_idx, attr_name, min_level, max_level, attr_uni = selected_attr[0][0], selected_attr[0][1], \
-            #         selected_attr[0][3], selected_attr[0][4], \
-            #         selected_attr[0][5]
-            #     value = answer_AoT.sample_new_value(component_idx, attr_name, min_level, max_level, attr_uni, None)
-            #     values.append(value)
-            #     new_AoT = copy.deepcopy(answer_AoT)
-            #     new_AoT.apply_new_value(component_idx, attr_name, value)
-            #     candidates.append(new_AoT)
-            #     component_idx, attr_name, min_level, max_level, attr_uni = selected_attr[1][0], selected_attr[1][1], \
-            #         selected_attr[1][3], selected_attr[1][4], \
-            #         selected_attr[1][5]
-            #     if mode == 'Position-Number':
-            #         ran, qu = 6, 1
-            #     else:
-            #         ran, qu = 3, 2
-            #     for i in range(ran):
-            #         value = answer_AoT.sample_new_value(component_idx, attr_name, min_level, max_level, attr_uni, None)
-            #         values.append(value)
-            #         for j in range(qu):
-            #             new_AoT = copy.deepcopy(candidates[j])
-            #             new_AoT.apply_new_value(component_idx, attr_name, value)
-            #             candidates.append(new_AoT)
-
-            # elif len(selected_attr) == 1:
-            #     component_idx, attr_name, min_level, max_level, attr_uni = selected_attr[0][0], selected_attr[0][1], \
-            #         selected_attr[0][3], selected_attr[0][4], \
-            #         selected_attr[0][5]
-            #     for i in range(7):
-            #         value = answer_AoT.sample_new_value(component_idx, attr_name, min_level, max_level, attr_uni, None)
-            #         values.append(value)
-            #         new_AoT = copy.deepcopy(answer_AoT)
-            #         new_AoT.apply_new_value(component_idx, attr_name, value)
-            #         candidates.append(new_AoT)
-
-            # random.shuffle(candidates)
-            # answers = []
-            # for candidate in candidates:
-            #     answers.append(render_panel(candidate))
-
-            # --- 步骤 4: 生成干扰项 (Hybrid: I-RAVEN Balanced + CoT Traps) ---
+            # --- 步骤 4: 生成干扰项 (I-RAVEN version)---
             rules_for_last_step = all_column_rules[-1]
-            target_panel = answer_AoT
-            
-            # 准备候选集，先放入正确答案
-            candidates = [target_panel]
+            modifiable_attr = sample_attr_avail(rules_for_last_step, answer_AoT)
+            candidates = [answer_AoT]
 
-            # ==========================================
-            # Part A: CoT 时间陷阱 (基于 P13/P14) - 3个
-            # ==========================================
-            # 目的：生成看起来像“上一步”或“上上步”的选项，强迫模型进行完整推理
-            p14_panel = all_panels[n_rows - 1][n_columns - 2]
-            p13_panel = all_panels[n_rows - 1][n_columns - 3]
-            
-            # 定义陷阱来源和数量
-            trap_sources = [
-                (p14_panel, 2), # 2个来自 P14 (t-1)
-                (p13_panel, 1)  # 1个来自 P13 (t-2)
-            ]
+            attr_num = 3
+            if attr_num <= len(modifiable_attr):
+                idx = np.random.choice(len(modifiable_attr), attr_num, replace=False)
+                selected_attr = [modifiable_attr[i] for i in idx]
+            else:
+                selected_attr = modifiable_attr
 
-            # 辅助函数：检查重复 (基于渲染结果)
-            def is_duplicate(aot1, aot2):
-                return np.array_equal(render_panel(aot1), render_panel(aot2))
+            mode = None
+            pos = [i for i in range(len(selected_attr)) if selected_attr[i][1] == 'Number']
+            if pos:
+                pos = pos[0]
+                selected_attr[pos], selected_attr[-1] = selected_attr[-1], selected_attr[pos]
 
-            for src_panel, count in trap_sources:
-                modifiable_attr = sample_attr_avail(rules_for_last_step, src_panel)
-                if not modifiable_attr: # 兜底
-                    src_panel = target_panel
-                    modifiable_attr = sample_attr_avail(rules_for_last_step, target_panel)
-                
-                for _ in range(count):
-                    # 尝试生成非重复的陷阱
-                    for _ in range(10):
-                        cand = copy.deepcopy(src_panel)
-                        # 逻辑陷阱策略：优先保持原样(模拟没走完推理)，如果重复则微调1个属性
-                        if is_duplicate(cand, target_panel):
-                            # 如果 P14 == Target (例如Constant规则)，则必须修改
-                            if modifiable_attr:
-                                idx = np.random.choice(len(modifiable_attr))
-                                c_idx, a_name, _, min_l, max_l, a_uni = modifiable_attr[idx]
-                                val = cand.sample_new_value(c_idx, a_name, min_l, max_l, a_uni, None)
-                                cand.apply_new_value(c_idx, a_name, val)
-                        else:
-                            # 如果 P14 != Target，有 50% 概率微调，50% 概率保持原样作为强干扰
-                            if modifiable_attr and np.random.random() < 0.5:
-                                idx = np.random.choice(len(modifiable_attr))
-                                c_idx, a_name, _, min_l, max_l, a_uni = modifiable_attr[idx]
-                                val = cand.sample_new_value(c_idx, a_name, min_l, max_l, a_uni, None)
-                                cand.apply_new_value(c_idx, a_name, val)
-                        
-                        # 查重
-                        is_unique = not is_duplicate(cand, target_panel)
-                        if is_unique:
-                            for exist in candidates:
-                                if is_duplicate(cand, exist):
-                                    is_unique = False; break
-                        
-                        if is_unique:
-                            candidates.append(cand)
-                            break
-
-            # ==========================================
-            # Part B: I-RAVEN 平衡干扰项 (基于 Target) - 补足 8 个
-            # ==========================================
-            # 目的：使用原版算法生成多属性修改的干扰项，保证属性分布的平衡性
-            # 计算还需要生成多少个 (通常是 8 - 1 - 3 = 4 个)
-            needed = 8 - len(candidates)
-            
-            if needed > 0:
-                # 获取 Target 的可修改属性
-                modifiable_attr = sample_attr_avail(rules_for_last_step, target_panel)
-                
-                # --- 复用 I-RAVEN 原版生成逻辑 (核心) ---
-                # 这段逻辑保证了修改属性的组合性 (1个, 2个, 3个属性组合修改)
-                
-                # 1. 确定要修改的属性集合
-                attr_num = 3
-                if attr_num <= len(modifiable_attr):
-                    idx = np.random.choice(len(modifiable_attr), attr_num, replace=False)
-                    selected_attr = [modifiable_attr[i] for i in idx]
-                else:
-                    selected_attr = modifiable_attr
-
-                # 2. 处理 Position-Number 联动
-                mode = None
-                pos = [i for i in range(len(selected_attr)) if selected_attr[i][1] == 'Number']
+                pos = [i for i in range(len(selected_attr)) if selected_attr[i][1] == 'Position']
                 if pos:
-                    pos = pos[0]
-                    selected_attr[pos], selected_attr[-1] = selected_attr[-1], selected_attr[pos]
-                    pos_chk = [i for i in range(len(selected_attr)) if selected_attr[i][1] == 'Position']
-                    if pos_chk: mode = 'Position-Number'
+                    mode = 'Position-Number'
+            values = []
+            if len(selected_attr) >= 3:
+                mode_3 = None
+                if mode == 'Position-Number':
+                    mode_3 = '3-Position-Number'
+                for i in range(attr_num):
+                    component_idx, attr_name, min_level, max_level, attr_uni = selected_attr[i][0], selected_attr[i][1], \
+                        selected_attr[i][3], selected_attr[i][4], \
+                        selected_attr[i][5]
+                    value = answer_AoT.sample_new_value(component_idx, attr_name, min_level, max_level, attr_uni,
+                                                        mode_3)
+                    values.append(value)
+                    tmp = []
+                    for j in candidates:
+                        new_AoT = copy.deepcopy(j)
+                        new_AoT.apply_new_value(component_idx, attr_name, value)
+                        tmp.append(new_AoT)
+                    candidates += tmp
 
-                # 3. 递归/循环生成
-                # I-RAVEN 原逻辑是生成一大堆然后选，这里我们简化为生成直到填满
-                while len(candidates) < 8:
-                    cand = copy.deepcopy(target_panel)
-                    
-                    # 随机决定修改几个属性 (1~len)，模仿 ABT 的层级
-                    num_to_mod = np.random.choice(range(1, len(selected_attr) + 1))
-                    
-                    # 按照 I-RAVEN 的方式修改属性
-                    # 这里简化了原版复杂的 if-else 树，直接进行组合修改
-                    current_attrs = selected_attr[:num_to_mod]
-                    
-                    for i in range(len(current_attrs)):
-                        c_idx, a_name, _, min_l, max_l, a_uni = current_attrs[i][0], current_attrs[i][1], \
-                            current_attrs[i][3], current_attrs[i][4], current_attrs[i][5]
-                        
-                        mode_param = mode if (mode == 'Position-Number' and i == len(current_attrs)-1) else None
-                        if mode_param == 'Position-Number' and i < 2: mode_param = '3-Position-Number' # 简化的逻辑
+            elif len(selected_attr) == 2:
+                component_idx, attr_name, min_level, max_level, attr_uni = selected_attr[0][0], selected_attr[0][1], \
+                    selected_attr[0][3], selected_attr[0][4], \
+                    selected_attr[0][5]
+                value = answer_AoT.sample_new_value(component_idx, attr_name, min_level, max_level, attr_uni, None)
+                values.append(value)
+                new_AoT = copy.deepcopy(answer_AoT)
+                new_AoT.apply_new_value(component_idx, attr_name, value)
+                candidates.append(new_AoT)
+                component_idx, attr_name, min_level, max_level, attr_uni = selected_attr[1][0], selected_attr[1][1], \
+                    selected_attr[1][3], selected_attr[1][4], \
+                    selected_attr[1][5]
+                if mode == 'Position-Number':
+                    ran, qu = 6, 1
+                else:
+                    ran, qu = 3, 2
+                for i in range(ran):
+                    value = answer_AoT.sample_new_value(component_idx, attr_name, min_level, max_level, attr_uni, None)
+                    values.append(value)
+                    for j in range(qu):
+                        new_AoT = copy.deepcopy(candidates[j])
+                        new_AoT.apply_new_value(component_idx, attr_name, value)
+                        candidates.append(new_AoT)
 
-                        val = cand.sample_new_value(c_idx, a_name, min_l, max_l, a_uni, mode_param)
-                        cand.apply_new_value(c_idx, a_name, val)
-                    
-                    # 查重
-                    is_unique = not is_duplicate(cand, target_panel)
-                    if is_unique:
-                        for exist in candidates:
-                            if is_duplicate(cand, exist):
-                                is_unique = False; break
-                    
-                    if is_unique:
-                        candidates.append(cand)
+            elif len(selected_attr) == 1:
+                component_idx, attr_name, min_level, max_level, attr_uni = selected_attr[0][0], selected_attr[0][1], \
+                    selected_attr[0][3], selected_attr[0][4], \
+                    selected_attr[0][5]
+                for i in range(7):
+                    value = answer_AoT.sample_new_value(component_idx, attr_name, min_level, max_level, attr_uni, None)
+                    values.append(value)
+                    new_AoT = copy.deepcopy(answer_AoT)
+                    new_AoT.apply_new_value(component_idx, attr_name, value)
+                    candidates.append(new_AoT)
 
             random.shuffle(candidates)
-            
-            # 最后 Prune 检查
-            if len(candidates) < 8:
-                # print(f"Skipping defective sample {k}: only {len(candidates)} candidates.")
-                continue
-
             answers = []
             for candidate in candidates:
                 answers.append(render_panel(candidate))

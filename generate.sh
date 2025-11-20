@@ -1,1 +1,1 @@
-python main.py --num-samples 10000 --save-dir ./dataset_test_3
+python main.py --num-samples 10000 --save-dir ./dataset_test_new_candidates

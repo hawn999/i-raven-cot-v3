@@ -1,5 +1,5 @@
 python visual.py --dataset ./dataset_test_3 --num_vis 100 --save_dir ./visual/test3 \
---config center_single
+--config in_distribute_four_out_center_single
 
 # python visual.py dataset --config center_single distribute_nine --num_vis 2 --no_random_sample
 # python visual.py /home/scxhc1/nvme_data/cot_datasets/v2_test1/I-RAVEN --save_dir ./my_visualizations
