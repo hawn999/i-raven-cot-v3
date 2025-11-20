@@ -1,4 +1,4 @@
-python visual.py --dataset ./test4 --num_vis 100 --save_dir ./visual/test4 \
+python visual.py --dataset ./test4_10000 --num_vis 100 --save_dir /home/scxhc1/pics/test4 \
 #--config in_distribute_four_out_center_single
 
 # python visual.py dataset --config center_single distribute_nine --num_vis 2 --no_random_sample
