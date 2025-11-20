@@ -1,7 +1,7 @@
 # 7w 144 143 center
 import os, glob, numpy as np
 
-dataset_dir = "./dataset_test_3"
+dataset_dir = "./test4_10000"
 pattern = "**/*_*.npz"
 
 expected_panels = 22

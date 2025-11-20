@@ -33,7 +33,7 @@ def separate(args, all_configs):
     np.random.seed(args.seed)
 
     n_rows = 3
-    n_columns = 5  # CoT-RAVEN.md中的 3xN
+    n_columns = 5
     r_base = 2  # 基础列的数量 (t=0, t=1)，为 2-arity 规则提供输入
 
     for key in list(all_configs.keys()):
@@ -60,7 +60,10 @@ def separate(args, all_configs):
             # --- 步骤 1: 生成基础列 (t=0, t=1) ---
             for r in range(n_rows):
                 for t in range(r_base):
-                    all_panels[r][t] = root.sample()
+                    panel = root.sample()
+                    panel.resample(change_number=True)
+                    all_panels[r][t] = panel
+                    # all_panels[r][t] = root.sample()
 
             # --- 步骤 2: 生成递推列 (t=2, 3, 4) ---
             for t in range(r_base, n_columns):
@@ -188,6 +191,7 @@ def separate(args, all_configs):
             answers = []
             for candidate in candidates:
                 answers.append(render_panel(candidate))
+
 
             # --- 步骤 5: 求解 ---
             context_panels_for_solver = all_panels[n_rows - 1][n_columns - r_base: n_columns - 1]
